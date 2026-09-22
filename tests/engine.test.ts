@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { FORM } from "@/form";
+import type { Form } from "@/form";
 import {
-  activeQuestions, canProbe, isSkipped, nextQuestion, previousQuestion, progress, validate,
+  activeQuestions, applyAnswer, canProbe, cleanAnswer, isSkipped, nextQuestion, previousQuestion,
+  progress, pruneSkipped, questionAfter, validate, wantsEmail,
   type Answers,
 } from "@/engine";
 
@@ -80,5 +82,93 @@ describe("canProbe", () => {
     expect(canProbe(q("case"), 1)).toBe(true);
     expect(canProbe(q("case"), 2)).toBe(false);
     expect(canProbe(q("role"), 0)).toBe(false);
+  });
+});
+
+describe("wantsEmail", () => {
+  it("asks for an e-mail unless only the opt-out is chosen", () => {
+    expect(wantsEmail(q("followup"), ["conversation"])).toBe(true);
+    expect(wantsEmail(q("followup"), ["conversation", "trial"])).toBe(true);
+    expect(wantsEmail(q("followup"), ["neither"])).toBe(false);
+    expect(wantsEmail(q("followup"), [])).toBe(false);
+    expect(wantsEmail(q("relations"), ["customer"])).toBe(false);
+  });
+});
+
+describe("cleanAnswer", () => {
+  it("drops the e-mail when the participant opted out", () => {
+    expect(cleanAnswer(q("followup"), { options: ["neither"], email: "a@b.ch" })).toEqual({ options: ["neither"] });
+  });
+  it("keeps a trimmed e-mail when contact is wanted", () => {
+    expect(cleanAnswer(q("followup"), { options: ["conversation"], email: " a@b.ch " })).toEqual({ options: ["conversation"], email: "a@b.ch" });
+  });
+  it("drops an e-mail on a question that never asks for one", () => {
+    expect(cleanAnswer(q("relations"), { options: ["customer"], email: "a@b.ch" })).toEqual({ options: ["customer"] });
+  });
+  it("leaves other answers as they are", () => {
+    expect(cleanAnswer(q("case"), { text: "  as typed  " })).toEqual({ text: "  as typed  " });
+    expect(cleanAnswer(q("role"), { option: "owner" })).toEqual({ option: "owner" });
+  });
+});
+
+describe("pruneSkipped", () => {
+  it("drops answers to questions that are now skipped", () => {
+    const answers: Answers = {
+      relations: { options: ["none"] }, case: { text: "old case" }, duration: { option: "lt2h" }, pains: { text: "p" },
+    };
+    expect(pruneSkipped(FORM, answers)).toEqual({ relations: { options: ["none"] }, pains: { text: "p" } });
+  });
+  it("keeps everything when nothing is skipped, and does not mutate its input", () => {
+    const answers: Answers = { relations: { options: ["customer"] }, case: { text: "c" } };
+    const copy = structuredClone(answers);
+    expect(pruneSkipped(FORM, answers)).toEqual(copy);
+    expect(answers).toEqual(copy);
+  });
+  it("follows chains: a skipped answer no longer triggers the rules that depend on it", () => {
+    const opt = (id: string) => ({ id, label: { de: id, en: id } });
+    const chain: Form = {
+      version: "0.0.0",
+      questions: [
+        { id: "a", type: "single", text: { de: "a", en: "a" }, options: [opt("yes"), opt("no")] },
+        { id: "b", type: "single", text: { de: "b", en: "b" }, options: [opt("x"), opt("y")] },
+        { id: "c", type: "open", text: { de: "c", en: "c" }, maxChars: 10 },
+      ],
+      skips: [
+        { when: { question: "a", is: "no" }, skip: ["b"] },
+        { when: { question: "b", is: "x" }, skip: ["c"] },
+      ],
+    };
+    const answers: Answers = { a: { option: "no" }, b: { option: "x" }, c: { text: "kept" } };
+    expect(pruneSkipped(chain, answers)).toEqual({ a: { option: "no" }, c: { text: "kept" } });
+  });
+});
+
+describe("applyAnswer", () => {
+  it("stores the cleaned answer and prunes what it skips", () => {
+    const before: Answers = { relations: { options: ["customer"] }, case: { text: "c" }, duration: { option: "lt2h" } };
+    expect(applyAnswer(FORM, before, "relations", { options: ["none"] })).toEqual({ relations: { options: ["none"] } });
+    expect(before.case).toEqual({ text: "c" });
+  });
+  it("cleans the value it stores", () => {
+    expect(applyAnswer(FORM, {}, "followup", { options: ["neither"], email: "a@b.ch" })).toEqual({ followup: { options: ["neither"] } });
+  });
+  it("rejects an unknown question id", () => {
+    expect(() => applyAnswer(FORM, {}, "nope", { text: "x" })).toThrow("unknown question: nope");
+  });
+});
+
+describe("questionAfter", () => {
+  const all: Answers = {
+    role: { option: "owner" }, size: { option: "1-9" }, relations: { options: ["customer"] }, case: { text: "c" },
+    duration: { option: "lt2h" }, pains: { text: "p" }, gains: { text: "g" }, followup: { options: ["neither"] },
+  };
+  it("walks forward in order, even over answered questions", () => {
+    expect(questionAfter(FORM, all, "size")?.id).toBe("relations");
+  });
+  it("jumps over skipped questions", () => {
+    expect(questionAfter(FORM, { relations: { options: ["none"] } }, "relations")?.id).toBe("pains");
+  });
+  it("returns null after the last active question", () => {
+    expect(questionAfter(FORM, all, "followup")).toBeNull();
   });
 });

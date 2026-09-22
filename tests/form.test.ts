@@ -50,4 +50,14 @@ describe("FORM", () => {
     const f = FORM.questions.find((q) => q.id === "followup");
     expect(f?.type === "multi" && f.email?.unlessOption).toBe("neither");
   });
+
+  it("names skip conditions before the questions they skip", () => {
+    // pruneSkipped walks the form once, in order; that is only correct when
+    // every rule looks back, never forward.
+    const at = (id: string) => FORM.questions.findIndex((x) => x.id === id);
+    for (const rule of FORM.skips) {
+      expect(at(rule.when.question)).toBeGreaterThanOrEqual(0);
+      for (const id of rule.skip) expect(at(id)).toBeGreaterThan(at(rule.when.question));
+    }
+  });
 });

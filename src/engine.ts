@@ -1,7 +1,8 @@
 // The rules of the form as pure functions: which questions are active, which
-// comes next, how far along we are, whether an answer is valid, and whether
-// the AI may ask a follow-up. No React, no network — everything here is
-// unit-tested without a browser.
+// comes next, how far along we are, whether an answer is valid, what a stored
+// answer may contain, and whether the AI may ask a follow-up. No React, no
+// network — the browser (M1) and the server (M2) both call these, so the two
+// can never disagree. Everything here is unit-tested without a browser.
 import type { Form, Question } from "@/form";
 import { t, type Lang } from "@/i18n";
 import { UI } from "@/texts";
@@ -45,6 +46,54 @@ export function progress(form: Form, answers: Answers): { done: number; total: n
   return { done: active.filter((q) => answers[q.id] !== undefined).length, total: active.length };
 }
 
+/** Whether this question needs an e-mail address for the options chosen. */
+export function wantsEmail(question: Question, options: string[]): boolean {
+  if (question.type !== "multi" || !question.email || options.length === 0) return false;
+  return !(options.length === 1 && options[0] === question.email.unlessOption);
+}
+
+/**
+ * The value as it may be stored. Drops an e-mail address the question does not
+ * need — typed and then opted out of, it must not be kept.
+ */
+export function cleanAnswer(question: Question, value: AnswerValue): AnswerValue {
+  if (!("options" in value)) return value;
+  const email = value.email?.trim() ?? "";
+  if (wantsEmail(question, value.options) && email.length > 0) return { options: value.options, email };
+  return { options: value.options };
+}
+
+/**
+ * Drops the answers to questions that are skipped. One pass in form order:
+ * a rule only sees answers already kept, so an answer that is itself skipped
+ * triggers nothing. Relies on every rule looking back (tested in form.test.ts).
+ */
+export function pruneSkipped(form: Form, answers: Answers): Answers {
+  const kept: Answers = {};
+  for (const q of form.questions) {
+    const value = answers[q.id];
+    if (value !== undefined && !isSkipped(form, q.id, kept)) kept[q.id] = value;
+  }
+  return kept;
+}
+
+/**
+ * The single way an answer enters the answer set: cleaned, stored under its
+ * question, then everything it skips removed. Returns a new object.
+ */
+export function applyAnswer(form: Form, answers: Answers, questionId: string, value: AnswerValue): Answers {
+  const question = form.questions.find((q) => q.id === questionId);
+  if (!question) throw new Error(`unknown question: ${questionId}`);
+  return pruneSkipped(form, { ...answers, [questionId]: cleanAnswer(question, value) });
+}
+
+/** The active question after this one, answered or not; null after the last. */
+export function questionAfter(form: Form, answers: Answers, currentId: string): Question | null {
+  const active = activeQuestions(form, answers);
+  const index = active.findIndex((q) => q.id === currentId);
+  return index >= 0 && index + 1 < active.length ? active[index + 1] : null;
+}
+
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function validate(question: Question, value: AnswerValue, lang: Lang): string | null {
@@ -58,7 +107,7 @@ export function validate(question: Question, value: AnswerValue, lang: Lang): st
   if (picked.length === 0) return t(UI.chooseOne, lang);
   if (question.type === "single") return null;
   if (question.exclusive && picked.includes(question.exclusive) && picked.length > 1) return t(UI.chooseOne, lang);
-  if (question.email && !(picked.length === 1 && picked[0] === question.email.unlessOption)) {
+  if (wantsEmail(question, picked)) {
     const email = "email" in value ? (value.email ?? "").trim() : "";
     if (email.length === 0) return t(UI.emailRequired, lang);
     if (!EMAIL.test(email)) return t(UI.emailInvalid, lang);
