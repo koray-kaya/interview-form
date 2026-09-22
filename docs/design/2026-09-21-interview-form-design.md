@@ -34,11 +34,11 @@ and it needs the rule that produced every question to be written down.
 | AI follow-ups | Only on the three open questions; up to 2 per question; only when the named element is missing | The point of the tool; the limit is code, the criterion is data |
 | Model access | Vercel AI Gateway, OIDC from the deployment | No key to manage, project budget caps spend, EU endpoints, catalog says "no training" |
 | Model | `anthropic/claude-sonnet-5`, fallback `anthropic/claude-haiku-4.5` | Quality first; ≈ 0.003 USD per call either way |
-| Storage | Supabase Postgres, region `eu-central-2` (Zurich), writes only from the server with `service_role` | Swiss data stays in Switzerland; the browser never holds a database credential |
+| Storage | Supabase Postgres, region `eu-central-2` (Zurich), one project for development and fieldwork, writes only from the server with the secret key (`service_role`) | Swiss data stays in Switzerland; the browser never holds a database credential; test rows are wiped before fieldwork |
 | Hosting | Vercel Hobby, single function region `fra1` | Free for non-commercial research; default region is the US and must be changed |
 | Backups | Daily cron: keep-alive read + JSON export to Vercel Blob; manual export script | Supabase Free pauses after 7 idle days and takes no backups |
 | Language | German by default, English as the second option; `?l=en` selects English; toggle on the welcome screen | Target firms are in German-speaking Switzerland; English for the rest |
-| Theme | Neutral: white, near-black text, one blue accent, 10 px radius, system font | Carries no brand; nothing a participant sees names a product |
+| Theme | Navy on slate and white (colours of the product mockup), Typeform-style interaction, system font (§6) | Consistent with the project's look; nothing a participant sees names a product |
 | Framework | Next.js (App Router, TypeScript), Tailwind, AI SDK, supabase-js, Zod, Vitest, Playwright | Vercel's own stack; one project holds page and server functions |
 
 ## 3. The form
@@ -331,10 +331,14 @@ Worst case per participant 6 calls ≈ 0.02 USD.
 - Vercel functions pinned to `fra1` (`vercel.json`), Supabase in Zurich,
   model endpoints in the EU. The path is Frankfurt → Zurich for data,
   Frankfurt → AI Gateway → Anthropic EU for the three probed answers.
-- `SUPABASE_SERVICE_ROLE_KEY` exists only in Vercel environment variables and
+- `SUPABASE_SECRET_KEY` exists only in Vercel environment variables and
   `.env.local`; the browser bundle contains no Supabase client.
 - Gateway authentication by OIDC; no API key exists.
-- RLS enabled on every table with no policies.
+- RLS enabled on every table with no policies. Table access is an explicit
+  `grant` to `service_role` only; `anon` and `authenticated` have none (new
+  projects no longer expose `public` tables to the Data API by default).
+- The server key is a secret key (`sb_secret_…`); the legacy JWT
+  `service_role` key stops working at the end of 2026.
 - Probing requires a well-formed UID with a valid check digit (weights
   5 4 3 2 7 6 5 4, mod 11 — ported from company-reach `tools/uid.py`). A
   stripped or forged tag yields the fixed questions only. This is not
@@ -394,7 +398,7 @@ Worst case per participant 6 calls ≈ 0.02 USD.
 
 Vercel project (name without any product name; decided at M4), Hobby plan,
 `regions: ["fra1"]`, environment variables `SUPABASE_URL`,
-`SUPABASE_SERVICE_ROLE_KEY`, `AI_GATEWAY_MODEL`, `PROBE_ENABLED`,
+`SUPABASE_SECRET_KEY`, `AI_GATEWAY_MODEL`, `PROBE_ENABLED`,
 `CRON_SECRET`, `BLOB_READ_WRITE_TOKEN`. Preview deployments stay behind
 Vercel Authentication; production is public but `noindex`. Locally:
 `vercel link && vercel env pull` gives the OIDC token for the gateway.
