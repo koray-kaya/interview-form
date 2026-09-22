@@ -1,32 +1,60 @@
-/* Theme tokens from the design (spec §6) exposed to Tailwind 4 through
-   @theme inline, plus the reduced-motion rule. No fonts are loaded. */
+/* Theme tokens exposed to Tailwind 4. Colours follow the product mockup
+   (navy blue-900 on slate and white); the interaction follows Typeform (one
+   screen at a time, underlined answers, screens slide in). No fonts are
+   loaded: the system face, as in the mockup. */
 @import "tailwindcss";
 
 :root {
   --background: #ffffff;
-  --foreground: #030213;
-  --muted: #ececf0;
-  --muted-foreground: #717182;
-  --accent: #2563eb;
-  --border: rgba(0, 0, 0, 0.1);
-  --input-background: #f3f3f5;
+  --wash: #f8fafc;              /* slate-50, top of the page gradient */
+  --foreground: #0f172b;        /* slate-900, question text */
+  --body: #45556c;              /* slate-600, helper and intro text */
+  --muted-foreground: #62748e;  /* slate-500, hints */
+  --border: #e2e8f0;            /* slate-200 */
+  --accent: #1c398e;            /* blue-900, the one brand colour */
+  --accent-hover: #193cb8;      /* blue-800 */
+  --danger: #c70036;            /* rose-700, errors only */
   --radius: 0.625rem;
 }
 
 @theme inline {
   --color-background: var(--background);
+  --color-wash: var(--wash);
   --color-foreground: var(--foreground);
-  --color-muted: var(--muted);
+  --color-body: var(--body);
   --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
   --color-border: var(--border);
-  --color-input: var(--input-background);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-danger: var(--danger);
   --radius-lg: var(--radius);
   --font-sans: ui-sans-serif, system-ui, sans-serif;
 }
 
+/* Motion: a screen slides in from the direction the participant moved; a
+   chosen option blinks twice to confirm. */
+@theme {
+  --animate-enter-up: enter-up 450ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  --animate-enter-down: enter-down 450ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  --animate-blink: blink 280ms ease-in-out 2;
+
+  @keyframes enter-up {
+    from { opacity: 0; transform: translateY(3rem); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes enter-down {
+    from { opacity: 0; transform: translateY(-3rem); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+}
+
 body {
-  background: var(--background);
+  min-height: 100dvh;
+  background: linear-gradient(to bottom, var(--wash), var(--background) 70%) fixed;
   color: var(--foreground);
   font-family: var(--font-sans);
 }

@@ -166,18 +166,27 @@ with the answer shown read-only above; while the model is called, a small
 Mobile first. Visible focus ring, labelled inputs, `prefers-reduced-motion`
 honoured. `<meta name="robots" content="noindex">`.
 
-Theme tokens (CSS variables):
+Theme tokens (CSS variables, updated 2026-09-22). Colours follow the product
+mockup: one navy on slate and white. The interaction follows Typeform.
 
 | Token | Value |
 |---|---|
 | `--background` | `#ffffff` |
-| `--foreground` | `#030213` |
-| `--muted` | `#ececf0` |
-| `--muted-foreground` | `#717182` |
-| `--accent` | `#2563eb` (progress bar, focus ring, links) |
-| `--border` | `rgba(0,0,0,.10)` |
-| `--input-background` | `#f3f3f5` |
+| `--wash` | `#f8fafc` (slate-50; page gradient from the top) |
+| `--foreground` | `#0f172b` (slate-900; question text) |
+| `--body` | `#45556c` (slate-600; helper and intro text) |
+| `--muted-foreground` | `#62748e` (slate-500; hints) |
+| `--border` | `#e2e8f0` (slate-200) |
+| `--accent` | `#1c398e` (blue-900; buttons, answers, choices, progress, focus) |
+| `--accent-hover` | `#193cb8` (blue-800) |
+| `--danger` | `#c70036` (errors only) |
 | `--radius` | `.625rem` |
+
+System font, no web font. Open answers are underlined, not boxed: large navy
+text on a line that turns solid on focus and grows with the text. A chosen
+option fills its key badge, shows a tick and blinks twice. Each screen slides
+in from below, or from above after Back (450 ms); the question number sits
+beside the question with a small arrow; up/down buttons bottom right.
 | font | `ui-sans-serif, system-ui, sans-serif` |
 
 ## 7. Data model (Supabase, `supabase/migrations/`)

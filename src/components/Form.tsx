@@ -51,6 +51,8 @@ function FormInBrowser({ initialLang }: Props) {
   const [stage, setStage] = useState<Stage>(start.stage);
   const [answers, setAnswers] = useState<Answers>(start.answers);
   const [currentId, setCurrentId] = useState<string | null>(start.currentId);
+  // which way the last move went, so the next screen slides in from there
+  const [direction, setDirection] = useState<"forward" | "back">("forward");
 
   useEffect(() => {
     saveSaved({ version: FORM_VERSION, lang, stage, answers });
@@ -65,7 +67,9 @@ function FormInBrowser({ initialLang }: Props) {
   function goBack() {
     if (!currentId) return;
     const previous = previousQuestion(FORM, answers, currentId);
-    if (previous) setCurrentId(previous.id);
+    if (!previous) return;
+    setDirection("back");
+    setCurrentId(previous.id);
   }
 
   useEffect(() => {
@@ -90,6 +94,7 @@ function FormInBrowser({ initialLang }: Props) {
     // applyAnswer cleans the value and drops answers the new one skips
     const updated = applyAnswer(FORM, answers, current.id, value);
     setAnswers(updated);
+    setDirection("forward");
     // walk forward screen by screen (also after Back); at the end, pick up
     // anything a changed answer un-skipped
     const next = questionAfter(FORM, updated, current.id) ?? nextQuestion(FORM, updated);
@@ -113,6 +118,7 @@ function FormInBrowser({ initialLang }: Props) {
         initial={answers[current.id]}
         onSubmit={submit}
         onBack={previousQuestion(FORM, answers, current.id) ? goBack : undefined}
+        direction={direction}
       />
     </main>
   );
