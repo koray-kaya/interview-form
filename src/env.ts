@@ -27,10 +27,7 @@ export function parseServerEnv(source: Record<string, string | undefined>): Serv
   return result.data;
 }
 
-let cached: ServerEnv | null = null;
-
-/** The checked environment of this process, read once. */
+/** The checked environment of this process (cheap; read on every call). */
 export function serverEnv(): ServerEnv {
-  cached ??= parseServerEnv(process.env);
-  return cached;
+  return parseServerEnv(process.env);
 }
