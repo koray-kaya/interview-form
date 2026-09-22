@@ -20,14 +20,13 @@ is the form they fill in.
 
 ## Status
 
-Designed and audited; not built yet. Five milestones — skeleton and form
-engine, storage, the AI follow-up, deployment, pilot. Each milestone is
+Milestone 1 of 5 is done: the form runs locally in both languages with no
+server. Five milestones — skeleton and form engine, storage, the AI
+follow-up, deployment, pilot. Each milestone is
 written with an AI coding assistant and explained to me before I review and
 merge it, so I learn how it works.
 
 ## Run it
-
-Not runnable yet. From milestone 1:
 
 ```bash
 git clone https://github.com/koray-kaya/interview-form.git
