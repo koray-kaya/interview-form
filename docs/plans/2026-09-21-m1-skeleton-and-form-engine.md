@@ -1269,6 +1269,7 @@ git commit -m "feat: choice and text inputs with keyboard handling"
 - Produces:
   - `<QuestionScreen question lang number initial? onSubmit onBack? />` — `number` is the 1-based position among active questions; `onSubmit(value: AnswerValue)` is called only with a valid value; `onBack` optional.
   - `<ProgressBar done total />`.
+  - Enter submits a choice question from anywhere on the page (added 2026-09-22; the spec's "Enter submits" held only for text before).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1325,6 +1326,16 @@ describe("QuestionScreen", () => {
     await userEvent.click(screen.getByRole("button", { name: "Back" }));
     expect(onBack).toHaveBeenCalled();
   });
+
+  it("Enter submits a choice question too, even with an option focused", async () => {
+    const onSubmit = vi.fn();
+    render(<QuestionScreen question={q("role")} lang="en" number={1} onSubmit={onSubmit} />);
+    await userEvent.click(screen.getByRole("radio", { name: /Sales/ })); // leaves focus on the option
+    await userEvent.keyboard("{Enter}");
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit).toHaveBeenCalledWith({ option: "sales" });
+    expect(screen.getByRole("radio", { name: /Sales/ })).toHaveAttribute("aria-checked", "true");
+  });
 });
 ```
 
@@ -1356,7 +1367,7 @@ export function ProgressBar({ done, total }: Props) {
 // One question on one screen: number, title, helper line, the right input for
 // the question type, the validation error, Back and OK. Holds the draft
 // answer locally; hands a valid AnswerValue up through onSubmit.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Question } from "@/form";
 import { cleanAnswer, validate, wantsEmail, type AnswerValue } from "@/engine";
 import { t, type Lang } from "@/i18n";
@@ -1402,6 +1413,22 @@ export function QuestionScreen({ question, lang, number, initial, onSubmit, onBa
 
   const showEmail = wantsEmail(question, selected);
 
+  // Enter submits a choice question from anywhere on the page. Text areas and
+  // the e-mail field handle Enter themselves. preventDefault stops the focused
+  // option button from also toggling on the same key press.
+  useEffect(() => {
+    if (question.type === "open") return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key !== "Enter" || event.isComposing) return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
+      event.preventDefault();
+      submit();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
   return (
     <section className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-16">
       <header className="flex items-start gap-3">
@@ -1432,7 +1459,9 @@ export function QuestionScreen({ question, lang, number, initial, onSubmit, onBa
             type="email"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
-            onKeyDown={(event) => event.key === "Enter" && submit()}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.nativeEvent.isComposing) submit();
+            }}
             className="rounded-lg border border-border bg-input p-3 text-lg outline-none focus:border-accent focus:ring-2 focus:ring-accent/30"
           />
         </label>
@@ -1458,7 +1487,7 @@ export function QuestionScreen({ question, lang, number, initial, onSubmit, onBa
 - [ ] **Step 5: Run the QuestionScreen test**
 
 Run: `npm test -- tests/components/QuestionScreen.test.tsx`
-Expected: PASS (5 tests).
+Expected: PASS (6 tests).
 
 - [ ] **Step 6: Commit**
 
@@ -1785,7 +1814,7 @@ describe("questionNumber", () => {
 - [ ] **Step 6: Run all tests**
 
 Run: `npm test`
-Expected: PASS — smoke 1, i18n 3, form 8, engine 27, storage 7, ChoiceInput 5, TextInput 5, QuestionScreen 5, Form 7.
+Expected: PASS — smoke 1, i18n 3, form 8, engine 27, storage 7, ChoiceInput 5, TextInput 5, QuestionScreen 6, Form 7.
 
 - [ ] **Step 7: Lint and build, then try it by hand**
 
