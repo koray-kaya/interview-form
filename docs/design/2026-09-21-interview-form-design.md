@@ -85,7 +85,9 @@ Rules:
 - Answers are capped at 4,000 characters.
 
 **Probe criteria** (what the model checks for; the participant never sees
-these):
+these). Each probed question has its own prompt, `prompts/probe-<id>.md`,
+which states the element, when it counts as present, and illustrative
+decisions; the prompt files are the source and the thesis prints them.
 
 | Question | Missing element | Context given to the model |
 |---|---|---|
@@ -278,7 +280,7 @@ Submitting an unchanged answer again (walking forward after Back) writes
 nothing and never calls the probe. The export reads only answers to active
 questions, as a second guard.
 
-## 9. The AI probe (`src/probe.ts`, `prompts/probe.md`)
+## 9. The AI probe (`src/probe.ts`, `prompts/probe-<id>.md`)
 
 **When.** After an answer to a question with `probe`, if
 `response.probe_allowed` and `PROBE_ENABLED` and follow-ups so far `<
@@ -409,7 +411,7 @@ Vercel Authentication; production is public but `noindex`. Locally:
 |---|---|---|---|
 | M1 | **Skeleton and form engine** | Next.js project, `form.ts` with all texts, pure engine with tests, the eight screens with the theme, in-memory answers, localStorage resume | `npm run dev` — fill the form in both languages |
 | M2 | **Storage** | Supabase schema and migrations, route handlers, upsert, consent gate, resume from server, reference code, export script, daily cron with Blob export | fill the form → rows in Supabase; `npm run export` |
-| M3 | **The probe** | `prompts/probe.md`, `probe.ts` with schema, post-check, timeout, fallback, `probe_calls`, UID gate, kill switch, prompt evals | a thin answer gets a follow-up, a detailed one does not; evals green |
+| M3 | **The probe** | `prompts/probe-<id>.md`, `probe.ts` with schema, post-check, timeout, fallback, `probe_calls`, UID gate, kill switch, prompt evals | a thin answer gets a follow-up, a detailed one does not; evals green |
 | M4 | **Deploy and harden** | Vercel project in `fra1`, env, budget and alerts, WAF rule, Playwright smoke test, final consent text, runbook | production URL works end to end on a phone |
 | M5 | **Pilot** | 2–3 pilot runs, metrics, hand review of every generated question, decision on `maxFollowUps`, pilot report | report attached to the thesis issue |
 

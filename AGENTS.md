@@ -22,8 +22,9 @@ Decided (2026-09-21), details in the design doc:
   the participant is never asked who they are. The tag is a label, not
   authentication; it only gates the AI cost.
 - AI follow-ups only on the three open questions, at most two each, only
-  when the named element is missing. The limit is code; the criterion is
-  data in `form.ts`; the prompt is `prompts/probe.md`, versioned.
+  when the named element is missing. The limit is code (`maxFollowUps` in
+  `form.ts`); what the model looks for is in each question's own versioned
+  prompt, `prompts/probe-<id>.md`.
 - Model through Vercel AI Gateway (OIDC, project budget); Supabase in
   Zurich, written only from the server; Vercel functions pinned to `fra1`.
 - Every model decision is logged with tokens, latency and outcome. If the
