@@ -2,17 +2,25 @@
 // comes next, how far along we are, whether an answer is valid, what a stored
 // answer may contain, and whether the AI may ask a follow-up. No React, no
 // network — the browser (M1) and the server (M2) both call these, so the two
-// can never disagree. Everything here is unit-tested without a browser.
+// can never disagree. Zod describes the shape of an answer, for data that
+// arrives from outside (localStorage now, request bodies in M2). Everything
+// here is unit-tested without a browser.
+import { z } from "zod";
 import type { Form, Question } from "@/form";
 import { t, type Lang } from "@/i18n";
 import { UI } from "@/texts";
 
-export type AnswerValue =
-  | { text: string }
-  | { option: string }
-  | { options: string[]; email?: string };
+/** One answer: free text, one option, or several options (plus an e-mail). */
+export const AnswerValueSchema = z.union([
+  z.object({ text: z.string() }),
+  z.object({ option: z.string() }),
+  z.object({ options: z.array(z.string()), email: z.string().optional() }),
+]);
+export type AnswerValue = z.infer<typeof AnswerValueSchema>;
 
-export type Answers = Record<string, AnswerValue>;
+/** All answers so far, keyed by question id. */
+export const AnswersSchema = z.record(z.string(), AnswerValueSchema);
+export type Answers = z.infer<typeof AnswersSchema>;
 
 function chosen(value: AnswerValue | undefined): string[] {
   if (!value) return [];
