@@ -20,8 +20,8 @@ is the form they fill in.
 
 ## Status
 
-Milestone 1 of 5 is done: the form runs locally in both languages with no
-server. Five milestones — skeleton and form engine, storage, the AI
+Milestones 1 and 2 of 5 are done: the form runs in both languages and stores
+every answer in the database in Zurich. Five milestones — skeleton and form engine, storage, the AI
 follow-up, deployment, pilot. Each milestone is
 written with an AI coding assistant and explained to me before I review and
 merge it, so I learn how it works.
@@ -32,9 +32,14 @@ merge it, so I learn how it works.
 git clone https://github.com/koray-kaya/interview-form.git
 cd interview-form
 npm install
+cp .env.example .env.local   # fill in the Supabase URL and secret key
 npm run dev          # http://localhost:3000 (German; ?l=en for English)
 npm test             # offline, a few seconds
+npm run export       # all rows to data/export-YYYY-MM-DD.json (gitignored)
 ```
+
+The database schema is in `supabase/migrations/`; apply it to a new Supabase
+project before the first run.
 
 ## Notes
 

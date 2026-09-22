@@ -3,7 +3,7 @@ import { FORM } from "@/form";
 import type { Form } from "@/form";
 import {
   activeQuestions, applyAnswer, canProbe, cleanAnswer, isSkipped, nextQuestion, previousQuestion,
-  progress, pruneSkipped, questionAfter, questionNumber, validate, wantsEmail,
+  progress, pruneSkipped, questionAfter, questionNumber, sameAnswer, validate, wantsEmail,
   type Answers,
 } from "@/engine";
 
@@ -177,5 +177,16 @@ describe("questionNumber", () => {
   it("numbers active questions from one", () => {
     expect(questionNumber(FORM, {}, "role")).toBe(1);
     expect(questionNumber(FORM, { relations: { options: ["none"] } }, "pains")).toBe(4);
+  });
+});
+
+describe("sameAnswer", () => {
+  it("ignores key order, as a database may reorder JSON keys", () => {
+    expect(sameAnswer({ options: ["conversation"], email: "a@b.ch" }, { email: "a@b.ch", options: ["conversation"] } as never)).toBe(true);
+  });
+  it("sees a changed value, a changed option order and a changed type", () => {
+    expect(sameAnswer({ text: "a" }, { text: "b" })).toBe(false);
+    expect(sameAnswer({ options: ["customer", "supplier"] }, { options: ["supplier", "customer"] })).toBe(false);
+    expect(sameAnswer({ option: "a" }, { options: ["a"] })).toBe(false);
   });
 });

@@ -131,3 +131,9 @@ export function canProbe(question: Question, followUpsSoFar: number): boolean {
 export function questionNumber(form: Form, answers: Answers, questionId: string): number {
   return activeQuestions(form, answers).findIndex((q) => q.id === questionId) + 1;
 }
+
+/** Whether two answers are the same, whatever order their keys arrive in. */
+export function sameAnswer(a: AnswerValue, b: AnswerValue): boolean {
+  const canonical = (value: AnswerValue) => JSON.stringify(Object.entries(value).sort(([x], [y]) => x.localeCompare(y)));
+  return canonical(a) === canonical(b);
+}
