@@ -1282,7 +1282,7 @@ export function ProgressBar({ done, total }: Props) {
 // answer locally; hands a valid AnswerValue up through onSubmit.
 import { useState } from "react";
 import type { Question } from "@/form";
-import { validate, type AnswerValue } from "@/engine";
+import { cleanAnswer, validate, wantsEmail, type AnswerValue } from "@/engine";
 import { t, type Lang } from "@/i18n";
 import { UI } from "@/texts";
 import { ChoiceInput } from "@/components/ChoiceInput";
@@ -1313,9 +1313,8 @@ export function QuestionScreen({ question, lang, number, initial, onSubmit, onBa
   function draft(): AnswerValue {
     if (question.type === "open") return { text: text.trim() };
     if (question.type === "single") return selected.length ? { option: selected[0] } : { options: [] };
-    const value: AnswerValue = { options: selected };
-    if (question.email && email.trim()) value.email = email.trim();
-    return value;
+    // cleanAnswer drops an e-mail the chosen options do not need
+    return cleanAnswer(question, { options: selected, email });
   }
 
   function submit() {
@@ -1325,11 +1324,7 @@ export function QuestionScreen({ question, lang, number, initial, onSubmit, onBa
     if (!problem) onSubmit(value);
   }
 
-  const wantsEmail =
-    question.type === "multi" &&
-    question.email !== undefined &&
-    selected.length > 0 &&
-    !(selected.length === 1 && selected[0] === question.email.unlessOption);
+  const showEmail = wantsEmail(question, selected);
 
   return (
     <section className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-16">
@@ -1354,7 +1349,7 @@ export function QuestionScreen({ question, lang, number, initial, onSubmit, onBa
         />
       )}
 
-      {wantsEmail && question.type === "multi" && question.email && (
+      {showEmail && question.type === "multi" && question.email && (
         <label className="flex flex-col gap-1">
           <span className="text-sm text-muted-foreground">{t(question.email.label, lang)}</span>
           <input
@@ -1480,6 +1475,36 @@ describe("Form", () => {
     await userEvent.click(screen.getByRole("button", { name: "Back" }));
     expect(screen.getByRole("radio", { name: /Sales/ })).toBeChecked();
   });
+
+  it("OK after Back walks forward one screen, not to the first unanswered", async () => {
+    await start("en");
+    await userEvent.click(screen.getByRole("radio", { name: /Sales/ }));
+    await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    await userEvent.click(screen.getByRole("radio", { name: /10–49/ }));
+    await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    await userEvent.click(screen.getByRole("button", { name: "Back" }));
+    await userEvent.click(screen.getByRole("button", { name: "Back" }));
+    await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    expect(screen.getByText(/How many people/)).toBeInTheDocument();
+  });
+
+  it("drops the case answer when relations is changed to none", async () => {
+    await start("en");
+    await userEvent.click(screen.getByRole("radio", { name: /Sales/ }));
+    await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    await userEvent.click(screen.getByRole("radio", { name: /10–49/ }));
+    await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: /a new customer/ }));
+    await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    await userEvent.type(screen.getByRole("textbox"), "I asked a colleague.{Enter}");
+    await userEvent.click(screen.getByRole("button", { name: "Back" }));
+    await userEvent.click(screen.getByRole("button", { name: "Back" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: /a new customer/ }));
+    await userEvent.click(screen.getByRole("checkbox", { name: /none of these/ }));
+    await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    expect(screen.getByText(/where does it get stuck/)).toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem("interview-form")!).answers.case).toBeUndefined();
+  });
 });
 ```
 
@@ -1566,7 +1591,7 @@ export function ThankYou({ lang }: { lang: Lang }) {
 // goes back. No network in M1 — M2 adds the server calls here.
 import { useEffect, useState } from "react";
 import { FORM, FORM_VERSION } from "@/form";
-import { nextQuestion, previousQuestion, progress, type Answers, type AnswerValue } from "@/engine";
+import { applyAnswer, nextQuestion, previousQuestion, progress, pruneSkipped, questionAfter, type Answers, type AnswerValue } from "@/engine";
 import type { Lang } from "@/i18n";
 import { loadSaved, saveSaved, type Stage } from "@/storage";
 import { ProgressBar } from "@/components/ProgressBar";
@@ -1589,8 +1614,9 @@ export function Form({ initialLang }: Props) {
     if (saved) {
       setLang(saved.lang);
       setStage(saved.stage);
-      setAnswers(saved.answers);
-      setCurrentId(saved.stage === "questions" ? (nextQuestion(FORM, saved.answers)?.id ?? null) : null);
+      const answers = pruneSkipped(FORM, saved.answers); // never trust stored state blindly
+      setAnswers(answers);
+      setCurrentId(saved.stage === "questions" ? (nextQuestion(FORM, answers)?.id ?? null) : null);
     }
     setLoaded(true);
   }, []);
@@ -1626,9 +1652,12 @@ export function Form({ initialLang }: Props) {
 
   function submit(value: AnswerValue) {
     if (!current) return;
-    const updated = { ...answers, [current.id]: value };
+    // applyAnswer cleans the value and drops answers the new one skips
+    const updated = applyAnswer(FORM, answers, current.id, value);
     setAnswers(updated);
-    const next = nextQuestion(FORM, updated);
+    // walk forward screen by screen (also after Back); at the end, pick up
+    // anything a changed answer un-skipped
+    const next = questionAfter(FORM, updated, current.id) ?? nextQuestion(FORM, updated);
     if (next) setCurrentId(next.id);
     else setStage("done");
   }
@@ -1680,7 +1709,7 @@ describe("questionNumber", () => {
 - [ ] **Step 6: Run all tests**
 
 Run: `npm test`
-Expected: PASS — smoke 1, i18n 3, form 7, engine 13, storage 5, ChoiceInput 4, TextInput 3, QuestionScreen 5, Form 5.
+Expected: PASS — smoke 1, i18n 3, form 8, engine 27, storage 5, ChoiceInput 4, TextInput 3, QuestionScreen 5, Form 7.
 
 - [ ] **Step 7: Lint and build, then try it by hand**
 

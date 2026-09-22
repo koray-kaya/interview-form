@@ -254,6 +254,19 @@ the stored id. A response can be resumed for 7 days; the daily cron deletes
 responses with `completed_at is null` older than that, which is the promise
 the consent text makes ("unfinished answers are deleted").
 
+**One rule for what an answer set contains** (added 2026-09-22, M1). The
+browser and the server call the same pure function, `applyAnswer` in
+`src/engine.ts`: it cleans the value (an e-mail address is dropped when the
+options chosen do not need one — typed and then opted out of, it is not
+kept) and removes the answers to every question the new answer skips. On the
+server, `POST /api/responses/:id/answers` loads the fixed answers
+(`followup_index = 0`), runs `applyAnswer`, and in one transaction upserts
+the new row and deletes every row, at every `followup_index`, of the
+questions it pruned. `probe_calls` rows stay: they record what happened.
+Submitting an unchanged answer again (walking forward after Back) writes
+nothing and never calls the probe. The export reads only answers to active
+questions, as a second guard.
+
 ## 9. The AI probe (`src/probe.ts`, `prompts/probe.md`)
 
 **When.** After an answer to a question with `probe`, if
@@ -393,6 +406,12 @@ Vercel Authentication; production is public but `noindex`. Locally:
 - Retention of raw answers after submission — ethics approval.
 - Native-speaker check of the German texts before the pilot.
 - HMAC-signed `c` tag (optional, only if misattribution ever matters).
+- Editing a probed answer after its follow-ups (M3 plan decides). The
+  participant goes back and changes the fixed answer to `case`, `pains` or
+  `gains`; the follow-ups were asked about the old text. Proposed default:
+  the limit counts model calls, not follow-ups shown, so the invariant in §4
+  holds; the earlier follow-up answers stay (each is stored with the question
+  text it answered); the edited answer is probed again only if calls remain.
 
 ## 16. Audit trace
 
