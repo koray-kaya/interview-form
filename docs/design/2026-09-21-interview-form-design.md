@@ -307,13 +307,17 @@ provider options; `maxRetries: 1`; one `AbortSignal` with an 8-second total
 deadline across primary and fallback. No `temperature` (Sonnet 5 does not
 expose it).
 
-**Rules in the prompt** (the prompt file is the source; this is the
-summary): you are helping a researcher understand how this person works; ask
-only for the missing element named; one question, at most 25 words, in the
-participant's language, polite `Sie` in German; never suggest a tool,
-product, service or solution; never ask about time or cost (asked
-elsewhere); never introduce a topic the participant did not raise; if the
-element is present, `missing = false` and `followUp = null`.
+**Rules in the prompts** (the three prompt files are the source; this is the
+summary, rewritten 2026-09-22 for Claude Sonnet 5, which follows
+instructions literally): each file gives the study's context and what that
+question's answer must contain, with when it counts as present and a few
+illustrative decisions. One question, in the participant's language, polite
+`Sie` and Swiss spelling in German, built on the person's own words, short
+enough to read on a phone (the exact length limit is the post-check, not the
+prompt). Two constraints carry their reason: no tool, product or service may
+be named (the thesis studies which ones people reach for unprompted), and
+time and cost are not asked (another question covers them). If the element
+is present, `missing = false` and `followUp = null`.
 
 **Post-check (deterministic, after the call).** The follow-up is shown only
 if: `missing` is true, `followUp` is non-empty, ≤ 200 characters, contains
