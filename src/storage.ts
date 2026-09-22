@@ -1,13 +1,10 @@
-// Mirrors the form state to localStorage so a refresh resumes where the
-// participant was. Browser storage can be missing or throw (private mode,
-// blocked storage), and what it returns may be stale or edited, so every read
-// is checked with Zod and any failure means "no state". Once the form is done
-// no answers stay in the browser. M2 replaces the answers here with a
-// server-side response id.
+// Mirrors where the participant is to localStorage so a refresh resumes: the
+// server's response id, the language, the stage, and, once done, the reference
+// code. Answers are never kept in the browser — the server holds them.
+// Browser storage can be missing, stale or edited, so every read is checked
+// with Zod and any failure means "no state".
 import { z } from "zod";
 import { FORM_VERSION } from "@/form";
-import { AnswersSchema, type Answers } from "@/engine";
-import type { Lang } from "@/i18n";
 
 const KEY = "interview-form";
 
@@ -15,11 +12,13 @@ const SavedSchema = z.object({
   version: z.string(),
   lang: z.enum(["de", "en"]),
   stage: z.enum(["welcome", "questions", "done"]),
-  answers: AnswersSchema,
+  responseId: z.uuid().nullable(),
+  referenceCode: z.string().regex(/^[0-9a-f]{8}$/).optional(),
+  inTouch: z.boolean().optional(),
 });
 
-export type Stage = z.infer<typeof SavedSchema>["stage"];
-export type Saved = { version: string; lang: Lang; stage: Stage; answers: Answers };
+export type Saved = z.infer<typeof SavedSchema>;
+export type Stage = Saved["stage"];
 
 export function loadSaved(): Saved | null {
   try {
@@ -34,10 +33,11 @@ export function loadSaved(): Saved | null {
 }
 
 export function saveSaved(saved: Saved): void {
-  // a finished form keeps only enough to show the thank-you page again
-  const kept = saved.stage === "done" ? { ...saved, answers: {} } : saved;
+  // parse drops any field the schema does not name, so nothing else is written
+  const kept = SavedSchema.safeParse(saved);
+  if (!kept.success) return;
   try {
-    localStorage.setItem(KEY, JSON.stringify(kept));
+    localStorage.setItem(KEY, JSON.stringify(kept.data));
   } catch {
     // storage unavailable — the form still works, it just will not resume
   }

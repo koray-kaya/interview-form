@@ -17,7 +17,8 @@ type Props = {
   lang: Lang;
   number: number;
   initial?: AnswerValue;
-  onSubmit: (value: AnswerValue) => void;
+  /** Stores the answer; resolves to an error message to show, or nothing when all went well. */
+  onSubmit: (value: AnswerValue) => Promise<string | null | void> | void;
   onBack?: () => void;
   /** Which way the participant moved to get here; sets the slide direction. */
   direction?: "forward" | "back";
@@ -35,6 +36,7 @@ export function QuestionScreen({ question, lang, number, initial, onSubmit, onBa
   const [selected, setSelected] = useState<string[]>(initialSelected(initial));
   const [email, setEmail] = useState(initial && "email" in initial ? (initial.email ?? "") : "");
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   function draft(): AnswerValue {
     if (question.type === "open") return { text: text.trim() };
@@ -43,11 +45,17 @@ export function QuestionScreen({ question, lang, number, initial, onSubmit, onBa
     return cleanAnswer(question, { options: selected, email });
   }
 
-  function submit() {
+  async function submit() {
+    if (busy) return; // one save at a time
     const value = draft();
     const problem = validate(question, value, lang);
     setError(problem);
-    if (!problem) onSubmit(value);
+    if (problem) return;
+    setBusy(true);
+    const serverProblem = await onSubmit(value);
+    // on success the next screen replaces this one; these updates then do nothing
+    setBusy(false);
+    setError(serverProblem ?? null);
   }
 
   const showEmail = wantsEmail(question, selected);
@@ -126,12 +134,14 @@ export function QuestionScreen({ question, lang, number, initial, onSubmit, onBa
             <button
               type="button"
               onClick={submit}
-              className="flex items-center gap-2 rounded-md bg-accent px-5 py-2.5 text-lg font-semibold text-white shadow-sm transition hover:bg-accent-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent active:scale-[0.98]"
+              aria-busy={busy}
+              className="flex items-center gap-2 rounded-md bg-accent px-5 py-2.5 text-lg font-semibold text-white shadow-sm transition hover:bg-accent-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent active:scale-[0.98] aria-busy:opacity-60"
             >
               {t(UI.ok, lang)}
               <Check className="h-4 w-4" />
             </button>
-            {question.type !== "open" && (
+            {busy && <span className="text-sm text-muted-foreground">{t(UI.saving, lang)}</span>}
+            {!busy && question.type !== "open" && (
               <span className="hidden text-sm text-muted-foreground sm:inline">{t(UI.pressEnter, lang)}</span>
             )}
           </div>

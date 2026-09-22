@@ -2,6 +2,9 @@
 // in form.ts; this file holds everything around them.
 import type { Text } from "@/i18n";
 
+/** Where participants send their reference code to have their answers removed. */
+export const CONTACT_EMAIL = "koray.kaya@ost.ch";
+
 export const UI = {
   title: { de: "Wie Schweizer Unternehmen andere Unternehmen unter die Lupe nehmen", en: "How Swiss firms look into other companies" },
   intro: {
@@ -28,6 +31,21 @@ export const UI = {
   chooseOne: { de: "Bitte wählen Sie eine Antwort.", en: "Please choose an answer." },
   thanksTitle: { de: "Vielen Dank", en: "Thank you" },
   thanksBody: { de: "Ihre Antworten sind gespeichert.", en: "Your answers are saved." },
+  referenceCode: { de: "Ihr Referenzcode", en: "Your reference code" },
+  withdraw: {
+    de: `Wenn Sie Ihre Antworten löschen lassen möchten, senden Sie diesen Code an ${CONTACT_EMAIL}.`,
+    en: `If you want your answers removed, send this code to ${CONTACT_EMAIL}.`,
+  },
+  inTouch: { de: "Ich melde mich per E-Mail bei Ihnen.", en: "I will be in touch by e-mail." },
+  saving: { de: "Speichern …", en: "Saving …" },
+  saveFailed: {
+    de: "Ihre Antwort konnte nicht gespeichert werden. Bitte prüfen Sie die Verbindung und drücken Sie erneut OK.",
+    en: "Your answer could not be saved. Please check your connection and press OK again.",
+  },
+  startFailed: {
+    de: "Die Umfrage konnte nicht gestartet werden. Bitte prüfen Sie die Verbindung und versuchen Sie es erneut.",
+    en: "The survey could not be started. Please check your connection and try again.",
+  },
   langDe: { de: "Deutsch", en: "Deutsch" },
   langEn: { de: "English", en: "English" },
 } satisfies Record<string, Text>;

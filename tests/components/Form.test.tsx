@@ -1,15 +1,29 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+
+vi.mock("@/api", async () => (await import("../support/fakeApi")).fakeApi);
+import { server } from "../support/fakeApi";
 import { Form } from "@/components/Form";
 
-beforeEach(() => localStorage.clear());
+beforeEach(() => {
+  localStorage.clear();
+  server.reset();
+});
 
-async function start(lang: "de" | "en") {
-  render(<Form initialLang={lang} />);
+async function start(lang: "de" | "en", c?: string) {
+  render(<Form initialLang={lang} companyTag={c} />);
   await userEvent.click(screen.getByRole("checkbox"));
   await userEvent.click(screen.getByRole("button", { name: /Start/ }));
+  await screen.findByText(lang === "en" ? /Your role/ : /Ihre Rolle/);
 }
+
+async function choose(name: RegExp) {
+  await userEvent.click(screen.getByRole("radio", { name }));
+  await userEvent.click(screen.getByRole("button", { name: "OK" }));
+}
+
+const only = () => [...server.responses.values()][0];
 
 describe("Form", () => {
   it("requires consent before starting", async () => {
@@ -27,87 +41,124 @@ describe("Form", () => {
     expect(document.documentElement.lang).toBe("en");
   });
 
-  it("walks the short path: none of these skips case and duration", async () => {
-    await start("en");
-    await userEvent.click(screen.getByRole("radio", { name: /Owner/ }));
-    await userEvent.click(screen.getByRole("button", { name: "OK" }));
-    await userEvent.click(screen.getByRole("radio", { name: /10–49/ }));
-    await userEvent.click(screen.getByRole("button", { name: "OK" }));
-    await userEvent.click(screen.getByRole("checkbox", { name: /none of these/ }));
-    await userEvent.click(screen.getByRole("button", { name: "OK" }));
-    expect(screen.getByText(/where does it get stuck/)).toBeInTheDocument();
-    await userEvent.type(screen.getByRole("textbox"), "Finding the right person.{Enter}");
-    await userEvent.type(screen.getByRole("textbox"), "A short list I could call.{Enter}");
-    await userEvent.click(screen.getByRole("checkbox", { name: /neither/ }));
-    await userEvent.click(screen.getByRole("button", { name: "OK" }));
-    expect(screen.getByText("Thank you")).toBeInTheDocument();
+  it("starts a response on the server with the company tag and the language", async () => {
+    const { fakeApi } = await import("../support/fakeApi");
+    await start("en", "CHE123456789");
+    expect(fakeApi.startResponse).toHaveBeenCalledWith({ c: "CHE123456789", lang: "en" });
   });
 
-  it("resumes after a reload", async () => {
+  it("walks the short path to the thank-you screen with a reference code", async () => {
+    await start("en");
+    await choose(/Owner/);
+    await screen.findByText(/How many people/);
+    await choose(/10–49/);
+    await screen.findByText(/did you look into another company/);
+    await userEvent.click(screen.getByRole("checkbox", { name: /none of these/ }));
+    await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    await screen.findByText(/where does it get stuck/);
+    await userEvent.type(screen.getByRole("textbox"), "Finding the right person.{Enter}");
+    await screen.findByText(/what would a really good result/);
+    await userEvent.type(screen.getByRole("textbox"), "A short list I could call.{Enter}");
+    await screen.findByText(/Would you be open to/);
+    await userEvent.click(screen.getByRole("checkbox", { name: /neither/ }));
+    await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    expect(await screen.findByText("Thank you")).toBeInTheDocument();
+    expect(screen.getByText("00000000")).toBeInTheDocument();
+    expect(screen.getByText(/koray\.kaya@ost\.ch/)).toBeInTheDocument();
+    expect(only().completed).toBe(true);
+  });
+
+  it("resumes after a reload from the server", async () => {
     const first = render(<Form initialLang="en" />);
     await userEvent.click(screen.getByRole("checkbox"));
     await userEvent.click(screen.getByRole("button", { name: /Start/ }));
-    await userEvent.click(screen.getByRole("radio", { name: /Sales/ }));
-    await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    await choose(/Sales/);
+    await screen.findByText(/How many people/);
     first.unmount();
     render(<Form initialLang="de" />);
+    expect(await screen.findByText(/How many people/)).toBeInTheDocument();
+    expect(localStorage.getItem("interview-form")).not.toContain("sales");
+  });
+
+  it("starts over when the server no longer knows the response", async () => {
+    const first = render(<Form initialLang="en" />);
+    await userEvent.click(screen.getByRole("checkbox"));
+    await userEvent.click(screen.getByRole("button", { name: /Start/ }));
+    await screen.findByText(/Your role/);
+    first.unmount();
+    server.reset(); // e.g. deleted by the seven-day cleanup
+    render(<Form initialLang="en" />);
+    expect(await screen.findByRole("button", { name: /Start/ })).toBeInTheDocument();
+  });
+
+  it("keeps the answer on screen and says so when saving fails", async () => {
+    await start("en");
+    server.failNextAnswer = true;
+    await userEvent.click(screen.getByRole("radio", { name: /Sales/ }));
+    await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/could not be saved/);
+    expect(screen.getByRole("radio", { name: /Sales/ })).toHaveAttribute("aria-checked", "true");
+    await userEvent.click(screen.getByRole("button", { name: "OK" }));
     expect(await screen.findByText(/How many people/)).toBeInTheDocument();
   });
 
   it("Back returns to the previous answer", async () => {
     await start("en");
-    await userEvent.click(screen.getByRole("radio", { name: /Sales/ }));
-    await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    await choose(/Sales/);
+    await screen.findByText(/How many people/);
     await userEvent.click(screen.getByRole("button", { name: "Back" }));
     expect(screen.getByRole("radio", { name: /Sales/ })).toBeChecked();
   });
 
   it("OK after Back walks forward one screen, not to the first unanswered", async () => {
     await start("en");
-    await userEvent.click(screen.getByRole("radio", { name: /Sales/ }));
-    await userEvent.click(screen.getByRole("button", { name: "OK" }));
-    await userEvent.click(screen.getByRole("radio", { name: /10–49/ }));
-    await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    await choose(/Sales/);
+    await screen.findByText(/How many people/);
+    await choose(/10–49/);
+    await screen.findByText(/did you look into another company/);
     await userEvent.click(screen.getByRole("button", { name: "Back" }));
     await userEvent.click(screen.getByRole("button", { name: "Back" }));
     await userEvent.click(screen.getByRole("button", { name: "OK" }));
-    expect(screen.getByText(/How many people/)).toBeInTheDocument();
+    expect(await screen.findByText(/How many people/)).toBeInTheDocument();
   });
 
-  it("drops the case answer when relations is changed to none", async () => {
+  it("drops the case answer on the server when relations is changed to none", async () => {
     await start("en");
-    await userEvent.click(screen.getByRole("radio", { name: /Sales/ }));
-    await userEvent.click(screen.getByRole("button", { name: "OK" }));
-    await userEvent.click(screen.getByRole("radio", { name: /10–49/ }));
-    await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    await choose(/Sales/);
+    await screen.findByText(/How many people/);
+    await choose(/10–49/);
+    await screen.findByText(/did you look into another company/);
     await userEvent.click(screen.getByRole("checkbox", { name: /a new customer/ }));
     await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    await screen.findByText(/most recent case/);
     await userEvent.type(screen.getByRole("textbox"), "I asked a colleague.{Enter}");
+    await screen.findByText(/how long did that take/i);
+    expect(only().answers.case).toEqual({ text: "I asked a colleague." });
     await userEvent.click(screen.getByRole("button", { name: "Back" }));
     await userEvent.click(screen.getByRole("button", { name: "Back" }));
-    await userEvent.click(screen.getByRole("checkbox", { name: /a new customer/ }));
     await userEvent.click(screen.getByRole("checkbox", { name: /none of these/ }));
     await userEvent.click(screen.getByRole("button", { name: "OK" }));
-    expect(screen.getByText(/where does it get stuck/)).toBeInTheDocument();
-    expect(JSON.parse(localStorage.getItem("interview-form")!).answers.case).toBeUndefined();
+    expect(await screen.findByText(/where does it get stuck/)).toBeInTheDocument();
+    expect(only().answers.case).toBeUndefined();
   });
 
   it("ArrowUp inside a text answer moves the cursor, it does not go back", async () => {
     await start("en");
-    await userEvent.click(screen.getByRole("radio", { name: /Sales/ }));
-    await userEvent.click(screen.getByRole("button", { name: "OK" }));
-    await userEvent.click(screen.getByRole("radio", { name: /10–49/ }));
-    await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    await choose(/Sales/);
+    await screen.findByText(/How many people/);
+    await choose(/10–49/);
+    await screen.findByText(/did you look into another company/);
     await userEvent.click(screen.getByRole("checkbox", { name: /a new customer/ }));
     await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    await screen.findByText(/most recent case/);
     await userEvent.type(screen.getByRole("textbox"), "first line{Shift>}{Enter}{/Shift}second{ArrowUp}");
     expect(screen.getByText(/most recent case/)).toBeInTheDocument();
   });
 
   it("ArrowUp elsewhere goes back", async () => {
     await start("en");
-    await userEvent.click(screen.getByRole("radio", { name: /Sales/ }));
-    await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    await choose(/Sales/);
+    await screen.findByText(/How many people/);
     await userEvent.keyboard("{ArrowUp}");
     expect(screen.getByText(/Your role/)).toBeInTheDocument();
   });
