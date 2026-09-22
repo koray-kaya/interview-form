@@ -722,8 +722,10 @@ git commit -m "feat: pure form engine with skips and validation"
 - Produces:
   - `type Stage = "welcome" | "questions" | "done"`
   - `type Saved = { version: string; lang: Lang; stage: Stage; answers: Answers }`
-  - `loadSaved(): Saved | null` — null when absent, unreadable, or from another form version
-  - `saveSaved(saved: Saved): void`, `clearSaved(): void` — never throw
+  - `loadSaved(): Saved | null` — null when absent, unreadable, of the wrong shape (checked with Zod), or from another form version
+  - `saveSaved(saved: Saved): void` — never throws; a `done` state is saved without answers
+  - `clearSaved(): void` — never throws
+- Also (2026-09-22): `AnswerValueSchema` and `AnswersSchema` (Zod) live in `src/engine.ts`; the types `AnswerValue` and `Answers` are inferred from them. M2 validates request bodies with the same schemas.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -752,6 +754,26 @@ describe("storage", () => {
     localStorage.setItem("interview-form", "{not json");
     expect(loadSaved()).toBeNull();
   });
+  it("ignores data of the wrong shape", () => {
+    const bad = [
+      { version: FORM_VERSION, lang: "de", stage: "questions" }, // no answers
+      { version: FORM_VERSION, lang: "fr", stage: "questions", answers: {} },
+      { version: FORM_VERSION, lang: "de", stage: "later", answers: {} },
+      { version: FORM_VERSION, lang: "de", stage: "questions", answers: { role: { option: 3 } } },
+      { version: FORM_VERSION, lang: "de", stage: "questions", answers: { role: "owner" } },
+      null,
+      [],
+    ];
+    for (const value of bad) {
+      localStorage.setItem("interview-form", JSON.stringify(value));
+      expect(loadSaved()).toBeNull();
+    }
+  });
+  it("keeps no answers in the browser once the form is done", () => {
+    saveSaved({ version: FORM_VERSION, lang: "en", stage: "done", answers: { followup: { options: ["conversation"], email: "a@b.ch" } } });
+    expect(localStorage.getItem("interview-form")).not.toContain("a@b.ch");
+    expect(loadSaved()).toEqual({ version: FORM_VERSION, lang: "en", stage: "done", answers: {} });
+  });
   it("clears", () => {
     saveSaved({ version: FORM_VERSION, lang: "en", stage: "done", answers: {} });
     clearSaved();
@@ -770,31 +792,44 @@ Expected: FAIL — cannot resolve `@/storage`.
 ```ts
 // Mirrors the form state to localStorage so a refresh resumes where the
 // participant was. Browser storage can be missing or throw (private mode,
-// blocked storage), so every call is wrapped and failure means "no state".
-// M2 replaces the answers here with a server-side response id.
+// blocked storage), and what it returns may be stale or edited, so every read
+// is checked with Zod and any failure means "no state". Once the form is done
+// no answers stay in the browser. M2 replaces the answers here with a
+// server-side response id.
+import { z } from "zod";
 import { FORM_VERSION } from "@/form";
-import type { Answers } from "@/engine";
+import { AnswersSchema, type Answers } from "@/engine";
 import type { Lang } from "@/i18n";
 
 const KEY = "interview-form";
 
-export type Stage = "welcome" | "questions" | "done";
+const SavedSchema = z.object({
+  version: z.string(),
+  lang: z.enum(["de", "en"]),
+  stage: z.enum(["welcome", "questions", "done"]),
+  answers: AnswersSchema,
+});
+
+export type Stage = z.infer<typeof SavedSchema>["stage"];
 export type Saved = { version: string; lang: Lang; stage: Stage; answers: Answers };
 
 export function loadSaved(): Saved | null {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return null;
-    const saved = JSON.parse(raw) as Saved;
-    return saved.version === FORM_VERSION ? saved : null;
+    const parsed = SavedSchema.safeParse(JSON.parse(raw));
+    if (!parsed.success || parsed.data.version !== FORM_VERSION) return null;
+    return parsed.data;
   } catch {
     return null;
   }
 }
 
 export function saveSaved(saved: Saved): void {
+  // a finished form keeps only enough to show the thank-you page again
+  const kept = saved.stage === "done" ? { ...saved, answers: {} } : saved;
   try {
-    localStorage.setItem(KEY, JSON.stringify(saved));
+    localStorage.setItem(KEY, JSON.stringify(kept));
   } catch {
     // storage unavailable — the form still works, it just will not resume
   }
@@ -812,7 +847,7 @@ export function clearSaved(): void {
 - [ ] **Step 4: Run the storage test**
 
 Run: `npm test -- tests/storage.test.ts`
-Expected: PASS (5 tests).
+Expected: PASS (7 tests).
 
 - [ ] **Step 5: Commit**
 
@@ -1709,7 +1744,7 @@ describe("questionNumber", () => {
 - [ ] **Step 6: Run all tests**
 
 Run: `npm test`
-Expected: PASS — smoke 1, i18n 3, form 8, engine 27, storage 5, ChoiceInput 4, TextInput 3, QuestionScreen 5, Form 7.
+Expected: PASS — smoke 1, i18n 3, form 8, engine 27, storage 7, ChoiceInput 4, TextInput 3, QuestionScreen 5, Form 7.
 
 - [ ] **Step 7: Lint and build, then try it by hand**
 
