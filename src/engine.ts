@@ -126,3 +126,8 @@ export function validate(question: Question, value: AnswerValue, lang: Lang): st
 export function canProbe(question: Question, followUpsSoFar: number): boolean {
   return question.type === "open" && question.probe !== undefined && followUpsSoFar < question.probe.maxFollowUps;
 }
+
+/** 1-based position of a question among the active ones, for the badge. */
+export function questionNumber(form: Form, answers: Answers, questionId: string): number {
+  return activeQuestions(form, answers).findIndex((q) => q.id === questionId) + 1;
+}

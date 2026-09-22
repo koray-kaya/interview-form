@@ -3,7 +3,7 @@ import { FORM } from "@/form";
 import type { Form } from "@/form";
 import {
   activeQuestions, applyAnswer, canProbe, cleanAnswer, isSkipped, nextQuestion, previousQuestion,
-  progress, pruneSkipped, questionAfter, validate, wantsEmail,
+  progress, pruneSkipped, questionAfter, questionNumber, validate, wantsEmail,
   type Answers,
 } from "@/engine";
 
@@ -170,5 +170,12 @@ describe("questionAfter", () => {
   });
   it("returns null after the last active question", () => {
     expect(questionAfter(FORM, all, "followup")).toBeNull();
+  });
+});
+
+describe("questionNumber", () => {
+  it("numbers active questions from one", () => {
+    expect(questionNumber(FORM, {}, "role")).toBe(1);
+    expect(questionNumber(FORM, { relations: { options: ["none"] } }, "pains")).toBe(4);
   });
 });

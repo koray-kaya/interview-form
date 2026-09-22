@@ -1540,9 +1540,9 @@ describe("Form", () => {
 
   it("switches language on the welcome screen", async () => {
     render(<Form initialLang="de" />);
-    expect(screen.getByText(/Schweizer Unternehmen/)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Schweizer Unternehmen/ })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "English" }));
-    expect(screen.getByText(/Swiss firms/)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Swiss firms/ })).toBeInTheDocument();
     expect(document.documentElement.lang).toBe("en");
   });
 
@@ -1609,6 +1609,26 @@ describe("Form", () => {
     await userEvent.click(screen.getByRole("button", { name: "OK" }));
     expect(screen.getByText(/where does it get stuck/)).toBeInTheDocument();
     expect(JSON.parse(localStorage.getItem("interview-form")!).answers.case).toBeUndefined();
+  });
+
+  it("ArrowUp inside a text answer moves the cursor, it does not go back", async () => {
+    await start("en");
+    await userEvent.click(screen.getByRole("radio", { name: /Sales/ }));
+    await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    await userEvent.click(screen.getByRole("radio", { name: /10–49/ }));
+    await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: /a new customer/ }));
+    await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    await userEvent.type(screen.getByRole("textbox"), "first line{Shift>}{Enter}{/Shift}second{ArrowUp}");
+    expect(screen.getByText(/most recent case/)).toBeInTheDocument();
+  });
+
+  it("ArrowUp elsewhere goes back", async () => {
+    await start("en");
+    await userEvent.click(screen.getByRole("radio", { name: /Sales/ }));
+    await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    await userEvent.keyboard("{ArrowUp}");
+    expect(screen.getByText(/Your role/)).toBeInTheDocument();
   });
 });
 ```
@@ -1694,9 +1714,12 @@ export function ThankYou({ lang }: { lang: Lang }) {
 // answers and the language; asks the engine which question comes next;
 // mirrors everything to localStorage so a refresh resumes. Keyboard: ArrowUp
 // goes back. No network in M1 — M2 adds the server calls here.
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { FORM, FORM_VERSION } from "@/form";
-import { applyAnswer, nextQuestion, previousQuestion, progress, pruneSkipped, questionAfter, type Answers, type AnswerValue } from "@/engine";
+import {
+  applyAnswer, nextQuestion, previousQuestion, progress, pruneSkipped, questionAfter, questionNumber,
+  type Answers, type AnswerValue,
+} from "@/engine";
 import type { Lang } from "@/i18n";
 import { loadSaved, saveSaved, type Stage } from "@/storage";
 import { ProgressBar } from "@/components/ProgressBar";
@@ -1706,29 +1729,43 @@ import { Welcome } from "@/components/Welcome";
 
 type Props = { initialLang: Lang };
 
+// true in the browser, false while Next.js renders the page on the server
+const noSubscription = () => () => {};
+function useInBrowser(): boolean {
+  return useSyncExternalStore(noSubscription, () => true, () => false);
+}
+
+/**
+ * The server sends an empty page; the form itself is built only in the
+ * browser, because its first state comes from localStorage, which the server
+ * does not have.
+ */
 export function Form({ initialLang }: Props) {
-  const [lang, setLang] = useState<Lang>(initialLang);
-  const [stage, setStage] = useState<Stage>("welcome");
-  const [answers, setAnswers] = useState<Answers>({});
-  const [currentId, setCurrentId] = useState<string | null>(null);
-  const [loaded, setLoaded] = useState(false);
+  return useInBrowser() ? <FormInBrowser initialLang={initialLang} /> : <main />;
+}
 
-  // Resume once, after mount (localStorage does not exist on the server).
-  useEffect(() => {
-    const saved = loadSaved();
-    if (saved) {
-      setLang(saved.lang);
-      setStage(saved.stage);
-      const answers = pruneSkipped(FORM, saved.answers); // never trust stored state blindly
-      setAnswers(answers);
-      setCurrentId(saved.stage === "questions" ? (nextQuestion(FORM, answers)?.id ?? null) : null);
-    }
-    setLoaded(true);
-  }, []);
+type Start = { lang: Lang; stage: Stage; answers: Answers; currentId: string | null };
+
+// Where to begin: the saved state if there is one, else the welcome screen.
+function restore(initialLang: Lang): Start {
+  const saved = loadSaved();
+  if (!saved) return { lang: initialLang, stage: "welcome", answers: {}, currentId: null };
+  const answers = pruneSkipped(FORM, saved.answers); // never trust stored state blindly
+  const currentId = saved.stage === "questions" ? (nextQuestion(FORM, answers)?.id ?? null) : null;
+  return { lang: saved.lang, stage: saved.stage, answers, currentId };
+}
+
+function FormInBrowser({ initialLang }: Props) {
+  // read localStorage once, on the first render (the function form of useState)
+  const [start] = useState(() => restore(initialLang));
+  const [lang, setLang] = useState<Lang>(start.lang);
+  const [stage, setStage] = useState<Stage>(start.stage);
+  const [answers, setAnswers] = useState<Answers>(start.answers);
+  const [currentId, setCurrentId] = useState<string | null>(start.currentId);
 
   useEffect(() => {
-    if (loaded) saveSaved({ version: FORM_VERSION, lang, stage, answers });
-  }, [loaded, lang, stage, answers]);
+    saveSaved({ version: FORM_VERSION, lang, stage, answers });
+  }, [lang, stage, answers]);
 
   useEffect(() => {
     document.documentElement.lang = lang;
@@ -1744,13 +1781,17 @@ export function Form({ initialLang }: Props) {
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
-      if (event.key === "ArrowUp" && stage === "questions") goBack();
+      if (event.key !== "ArrowUp" || stage !== "questions") return;
+      // inside a text answer or the e-mail field, ArrowUp moves the cursor
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
+      goBack();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  function start() {
+  function begin() {
     setStage("questions");
     setCurrentId(nextQuestion(FORM, answers)?.id ?? null);
   }
@@ -1767,13 +1808,10 @@ export function Form({ initialLang }: Props) {
     else setStage("done");
   }
 
-  if (!loaded) return <main />;
-
-  if (stage === "welcome") return <main><Welcome lang={lang} onLang={setLang} onStart={start} /></main>;
+  if (stage === "welcome") return <main><Welcome lang={lang} onLang={setLang} onStart={begin} /></main>;
   if (stage === "done" || !current) return <main><ThankYou lang={lang} /></main>;
 
   const { done, total } = progress(FORM, answers);
-  const number = FORM.questions.filter((q) => !(FORM.skips.some((s) => s.skip.includes(q.id) && (answers[s.when.question] && "options" in answers[s.when.question] && (answers[s.when.question] as { options: string[] }).options.includes(s.when.is))))).findIndex((q) => q.id === current.id) + 1;
 
   return (
     <main>
@@ -1782,7 +1820,7 @@ export function Form({ initialLang }: Props) {
         key={current.id}
         question={current}
         lang={lang}
-        number={number}
+        number={questionNumber(FORM, answers, current.id)}
         initial={answers[current.id]}
         onSubmit={submit}
         onBack={previousQuestion(FORM, answers, current.id) ? goBack : undefined}
@@ -1792,29 +1830,12 @@ export function Form({ initialLang }: Props) {
 }
 ```
 
-The `number` line above is deliberately ugly so you notice it: replace it with the engine before committing — add to `src/engine.ts`:
-
-```ts
-export function questionNumber(form: Form, answers: Answers, questionId: string): number {
-  return activeQuestions(form, answers).findIndex((q) => q.id === questionId) + 1;
-}
-```
-
-and in `Form.tsx` use `const number = questionNumber(FORM, answers, current.id);` (import it). Add to `tests/engine.test.ts`:
-
-```ts
-describe("questionNumber", () => {
-  it("numbers active questions from one", () => {
-    expect(questionNumber(FORM, {}, "role")).toBe(1);
-    expect(questionNumber(FORM, { relations: { options: ["none"] } }, "pains")).toBe(4);
-  });
-});
-```
+`questionNumber` lives in `src/engine.ts` (tested in `tests/engine.test.ts`). As built (2026-09-22): the form is created only in the browser (`useSyncExternalStore`) and restores localStorage in a `useState` initializer, which the React lint rule `set-state-in-effect` requires; ArrowUp inside a text field or the e-mail field moves the cursor instead of going back.
 
 - [ ] **Step 6: Run all tests**
 
 Run: `npm test`
-Expected: PASS — smoke 1, i18n 3, form 8, engine 27, storage 7, ChoiceInput 5, TextInput 5, QuestionScreen 6, Form 7.
+Expected: PASS — smoke 1, i18n 3, form 8, engine 27, storage 7, ChoiceInput 5, TextInput 5, QuestionScreen 6, Form 9.
 
 - [ ] **Step 7: Lint and build, then try it by hand**
 
