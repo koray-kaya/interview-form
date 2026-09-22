@@ -41,6 +41,12 @@ describe("POST /api/responses", () => {
     });
   });
 
+  it("allows probing only for a tag with a valid UID check digit", async () => {
+    const response = await create({ c: "CHE-123.456.788", lang: "de", consent: true });
+    expect(await response.json()).toEqual({ id: ID, probeAllowed: true });
+    expect(vi.mocked(db.createResponse).mock.calls[0][0]).toMatchObject({ companyUid: "CHE-123.456.788", probeAllowed: true });
+  });
+
   it("stores no tag when c is missing or empty", async () => {
     await create({ lang: "en", consent: true });
     await create({ c: "  ", lang: "en", consent: true });
