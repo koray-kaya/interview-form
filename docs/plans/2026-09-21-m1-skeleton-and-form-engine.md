@@ -985,7 +985,9 @@ git commit -m "feat: theme tokens, noindex layout, language from query"
 - Consumes: `Option` from `@/form`; `Lang`, `t` from `@/i18n`; `UI` from `@/texts`.
 - Produces:
   - `<ChoiceInput options lang multiple exclusive? selected onChange />` — `selected: string[]`, `onChange(ids: string[])`; letter keys A, B, C … toggle options.
-  - `<TextInput value maxChars lang onChange onSubmit />` — Enter calls `onSubmit`, Shift+Enter inserts a newline.
+  - `<TextInput value maxChars lang onChange onSubmit />` — Enter calls `onSubmit`, Shift+Enter inserts a newline; on a touch screen (`pointer: coarse`) Enter inserts a newline and the hint is hidden; Enter during IME composition does nothing.
+  - Letter keys are ignored while Cmd, Ctrl or Alt is held.
+  - `tests/setup.ts` also calls Testing Library's `cleanup` after each test (auto-cleanup needs Vitest globals, which are off).
 
 - [ ] **Step 1: Write the failing ChoiceInput test**
 
@@ -1037,6 +1039,13 @@ describe("ChoiceInput", () => {
     await userEvent.keyboard("b");
     expect(onChange).toHaveBeenCalledWith(["b"]);
   });
+
+  it("ignores letter keys held with a modifier (Cmd+C copies, it does not choose C)", async () => {
+    const onChange = vi.fn();
+    render(<ChoiceInput options={options} lang="en" multiple={false} selected={[]} onChange={onChange} />);
+    await userEvent.keyboard("{Meta>}b{/Meta}{Control>}b{/Control}{Alt>}b{/Alt}");
+    expect(onChange).not.toHaveBeenCalled();
+  });
 });
 ```
 
@@ -1080,6 +1089,7 @@ export function ChoiceInput({ options, lang, multiple, exclusive, selected, onCh
     function onKey(event: KeyboardEvent) {
       const target = event.target as HTMLElement | null;
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return; // shortcuts such as Cmd+C
       const index = KEYS.indexOf(event.key.toUpperCase());
       if (index >= 0 && index < options.length) toggle(options[index].id);
     }
@@ -1118,17 +1128,23 @@ export function ChoiceInput({ options, lang, multiple, exclusive, selected, onCh
 - [ ] **Step 4: Run the ChoiceInput test**
 
 Run: `npm test -- tests/components/ChoiceInput.test.tsx`
-Expected: PASS (4 tests).
+Expected: PASS (5 tests).
 
 - [ ] **Step 5: Write the failing TextInput test**
 
 Create `tests/components/TextInput.test.tsx`:
 
 ```tsx
-import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { TextInput } from "@/components/TextInput";
+
+// jsdom has no matchMedia; a test that needs a touch screen defines it.
+function touchScreen() {
+  vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(pointer: coarse)" }));
+}
+afterEach(() => vi.unstubAllGlobals());
 
 describe("TextInput", () => {
   it("reports typing", async () => {
@@ -1152,6 +1168,22 @@ describe("TextInput", () => {
     render(<TextInput value="" maxChars={4000} lang="de" onChange={() => {}} onSubmit={() => {}} />);
     expect(screen.getByText(/Zeilenumbruch/)).toBeInTheDocument();
   });
+
+  it("does not submit while a character is being composed", () => {
+    const onSubmit = vi.fn();
+    render(<TextInput value="x" maxChars={4000} lang="en" onChange={() => {}} onSubmit={onSubmit} />);
+    fireEvent.keyDown(screen.getByRole("textbox"), { key: "Enter", isComposing: true });
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("on a touch screen Enter makes a line break and the hint is hidden", async () => {
+    touchScreen();
+    const onSubmit = vi.fn();
+    render(<TextInput value="x" maxChars={4000} lang="de" onChange={() => {}} onSubmit={onSubmit} />);
+    await userEvent.type(screen.getByRole("textbox"), "{Enter}");
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Zeilenumbruch/)).not.toBeInTheDocument();
+  });
 });
 ```
 
@@ -1164,8 +1196,10 @@ Expected: FAIL — cannot resolve `@/components/TextInput`.
 
 ```tsx
 "use client";
-// A textarea for open answers. Enter submits, Shift+Enter inserts a line
-// break (the Typeform convention), and a counter appears near the cap.
+// A textarea for open answers. On a keyboard, Enter submits and Shift+Enter
+// inserts a line break (the Typeform convention). On a touch screen there is
+// no Shift key, so Enter is a line break and the OK button submits. A counter
+// appears near the cap.
 import { t, type Lang } from "@/i18n";
 import { UI } from "@/texts";
 
@@ -1177,7 +1211,14 @@ type Props = {
   onSubmit: () => void;
 };
 
+// Phones and tablets report a coarse pointer. The form renders only in the
+// browser (it waits for localStorage), so reading window here is safe.
+function isTouchScreen(): boolean {
+  return typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches === true;
+}
+
 export function TextInput({ value, maxChars, lang, onChange, onSubmit }: Props) {
+  const touch = isTouchScreen();
   return (
     <div className="flex flex-col gap-2">
       <textarea
@@ -1187,15 +1228,15 @@ export function TextInput({ value, maxChars, lang, onChange, onSubmit }: Props) 
         maxLength={maxChars}
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={(event) => {
-          if (event.key === "Enter" && !event.shiftKey) {
-            event.preventDefault();
-            onSubmit();
-          }
+          if (event.key !== "Enter" || event.shiftKey || touch) return;
+          if (event.nativeEvent.isComposing) return; // an accent or a suggestion is being typed
+          event.preventDefault();
+          onSubmit();
         }}
         className="w-full rounded-lg border border-border bg-input p-3 text-lg outline-none focus:border-accent focus:ring-2 focus:ring-accent/30"
       />
       <div className="flex justify-between text-sm text-muted-foreground">
-        <span>{t(UI.shiftEnter, lang)}</span>
+        <span>{touch ? "" : t(UI.shiftEnter, lang)}</span>
         {value.length > maxChars - 500 && <span>{value.length} / {maxChars}</span>}
       </div>
     </div>
@@ -1206,7 +1247,7 @@ export function TextInput({ value, maxChars, lang, onChange, onSubmit }: Props) 
 - [ ] **Step 8: Run the TextInput test**
 
 Run: `npm test -- tests/components/TextInput.test.tsx`
-Expected: PASS (3 tests).
+Expected: PASS (5 tests).
 
 - [ ] **Step 9: Commit**
 
@@ -1744,7 +1785,7 @@ describe("questionNumber", () => {
 - [ ] **Step 6: Run all tests**
 
 Run: `npm test`
-Expected: PASS — smoke 1, i18n 3, form 8, engine 27, storage 7, ChoiceInput 4, TextInput 3, QuestionScreen 5, Form 7.
+Expected: PASS — smoke 1, i18n 3, form 8, engine 27, storage 7, ChoiceInput 5, TextInput 5, QuestionScreen 5, Form 7.
 
 - [ ] **Step 7: Lint and build, then try it by hand**
 

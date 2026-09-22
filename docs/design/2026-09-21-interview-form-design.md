@@ -155,7 +155,9 @@ runs without the network and is unit-tested.
 
 One question per screen, like Typeform: question in large type, helper line
 in muted grey, the input, an **OK** button, `Enter` submits (`Shift+Enter` for
-a new line in text areas), key hints `A B C` on choices, a thin progress bar
+a new line in text areas; on a touch screen, which has no Shift key, `Enter`
+is a new line and OK submits), key hints `A B C` on choices (ignored while
+Cmd, Ctrl or Alt is held), a thin progress bar
 at the top, up/down arrows bottom right, language toggle on the welcome
 screen only. Follow-up questions appear on the same screen below the answer,
 with the answer shown read-only above; while the model is called, a small
