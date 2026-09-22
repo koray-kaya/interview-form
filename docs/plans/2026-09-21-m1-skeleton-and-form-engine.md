@@ -722,8 +722,10 @@ git commit -m "feat: pure form engine with skips and validation"
 - Produces:
   - `type Stage = "welcome" | "questions" | "done"`
   - `type Saved = { version: string; lang: Lang; stage: Stage; answers: Answers }`
-  - `loadSaved(): Saved | null` — null when absent, unreadable, or from another form version
-  - `saveSaved(saved: Saved): void`, `clearSaved(): void` — never throw
+  - `loadSaved(): Saved | null` — null when absent, unreadable, of the wrong shape (checked with Zod), or from another form version
+  - `saveSaved(saved: Saved): void` — never throws; a `done` state is saved without answers
+  - `clearSaved(): void` — never throws
+- Also (2026-09-22): `AnswerValueSchema` and `AnswersSchema` (Zod) live in `src/engine.ts`; the types `AnswerValue` and `Answers` are inferred from them. M2 validates request bodies with the same schemas.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -752,6 +754,26 @@ describe("storage", () => {
     localStorage.setItem("interview-form", "{not json");
     expect(loadSaved()).toBeNull();
   });
+  it("ignores data of the wrong shape", () => {
+    const bad = [
+      { version: FORM_VERSION, lang: "de", stage: "questions" }, // no answers
+      { version: FORM_VERSION, lang: "fr", stage: "questions", answers: {} },
+      { version: FORM_VERSION, lang: "de", stage: "later", answers: {} },
+      { version: FORM_VERSION, lang: "de", stage: "questions", answers: { role: { option: 3 } } },
+      { version: FORM_VERSION, lang: "de", stage: "questions", answers: { role: "owner" } },
+      null,
+      [],
+    ];
+    for (const value of bad) {
+      localStorage.setItem("interview-form", JSON.stringify(value));
+      expect(loadSaved()).toBeNull();
+    }
+  });
+  it("keeps no answers in the browser once the form is done", () => {
+    saveSaved({ version: FORM_VERSION, lang: "en", stage: "done", answers: { followup: { options: ["conversation"], email: "a@b.ch" } } });
+    expect(localStorage.getItem("interview-form")).not.toContain("a@b.ch");
+    expect(loadSaved()).toEqual({ version: FORM_VERSION, lang: "en", stage: "done", answers: {} });
+  });
   it("clears", () => {
     saveSaved({ version: FORM_VERSION, lang: "en", stage: "done", answers: {} });
     clearSaved();
@@ -770,31 +792,44 @@ Expected: FAIL — cannot resolve `@/storage`.
 ```ts
 // Mirrors the form state to localStorage so a refresh resumes where the
 // participant was. Browser storage can be missing or throw (private mode,
-// blocked storage), so every call is wrapped and failure means "no state".
-// M2 replaces the answers here with a server-side response id.
+// blocked storage), and what it returns may be stale or edited, so every read
+// is checked with Zod and any failure means "no state". Once the form is done
+// no answers stay in the browser. M2 replaces the answers here with a
+// server-side response id.
+import { z } from "zod";
 import { FORM_VERSION } from "@/form";
-import type { Answers } from "@/engine";
+import { AnswersSchema, type Answers } from "@/engine";
 import type { Lang } from "@/i18n";
 
 const KEY = "interview-form";
 
-export type Stage = "welcome" | "questions" | "done";
+const SavedSchema = z.object({
+  version: z.string(),
+  lang: z.enum(["de", "en"]),
+  stage: z.enum(["welcome", "questions", "done"]),
+  answers: AnswersSchema,
+});
+
+export type Stage = z.infer<typeof SavedSchema>["stage"];
 export type Saved = { version: string; lang: Lang; stage: Stage; answers: Answers };
 
 export function loadSaved(): Saved | null {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return null;
-    const saved = JSON.parse(raw) as Saved;
-    return saved.version === FORM_VERSION ? saved : null;
+    const parsed = SavedSchema.safeParse(JSON.parse(raw));
+    if (!parsed.success || parsed.data.version !== FORM_VERSION) return null;
+    return parsed.data;
   } catch {
     return null;
   }
 }
 
 export function saveSaved(saved: Saved): void {
+  // a finished form keeps only enough to show the thank-you page again
+  const kept = saved.stage === "done" ? { ...saved, answers: {} } : saved;
   try {
-    localStorage.setItem(KEY, JSON.stringify(saved));
+    localStorage.setItem(KEY, JSON.stringify(kept));
   } catch {
     // storage unavailable — the form still works, it just will not resume
   }
@@ -812,7 +847,7 @@ export function clearSaved(): void {
 - [ ] **Step 4: Run the storage test**
 
 Run: `npm test -- tests/storage.test.ts`
-Expected: PASS (5 tests).
+Expected: PASS (7 tests).
 
 - [ ] **Step 5: Commit**
 
@@ -950,7 +985,9 @@ git commit -m "feat: theme tokens, noindex layout, language from query"
 - Consumes: `Option` from `@/form`; `Lang`, `t` from `@/i18n`; `UI` from `@/texts`.
 - Produces:
   - `<ChoiceInput options lang multiple exclusive? selected onChange />` — `selected: string[]`, `onChange(ids: string[])`; letter keys A, B, C … toggle options.
-  - `<TextInput value maxChars lang onChange onSubmit />` — Enter calls `onSubmit`, Shift+Enter inserts a newline.
+  - `<TextInput value maxChars lang onChange onSubmit />` — Enter calls `onSubmit`, Shift+Enter inserts a newline; on a touch screen (`pointer: coarse`) Enter inserts a newline and the hint is hidden; Enter during IME composition does nothing.
+  - Letter keys are ignored while Cmd, Ctrl or Alt is held.
+  - `tests/setup.ts` also calls Testing Library's `cleanup` after each test (auto-cleanup needs Vitest globals, which are off).
 
 - [ ] **Step 1: Write the failing ChoiceInput test**
 
@@ -1002,6 +1039,13 @@ describe("ChoiceInput", () => {
     await userEvent.keyboard("b");
     expect(onChange).toHaveBeenCalledWith(["b"]);
   });
+
+  it("ignores letter keys held with a modifier (Cmd+C copies, it does not choose C)", async () => {
+    const onChange = vi.fn();
+    render(<ChoiceInput options={options} lang="en" multiple={false} selected={[]} onChange={onChange} />);
+    await userEvent.keyboard("{Meta>}b{/Meta}{Control>}b{/Control}{Alt>}b{/Alt}");
+    expect(onChange).not.toHaveBeenCalled();
+  });
 });
 ```
 
@@ -1045,6 +1089,7 @@ export function ChoiceInput({ options, lang, multiple, exclusive, selected, onCh
     function onKey(event: KeyboardEvent) {
       const target = event.target as HTMLElement | null;
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return; // shortcuts such as Cmd+C
       const index = KEYS.indexOf(event.key.toUpperCase());
       if (index >= 0 && index < options.length) toggle(options[index].id);
     }
@@ -1083,17 +1128,23 @@ export function ChoiceInput({ options, lang, multiple, exclusive, selected, onCh
 - [ ] **Step 4: Run the ChoiceInput test**
 
 Run: `npm test -- tests/components/ChoiceInput.test.tsx`
-Expected: PASS (4 tests).
+Expected: PASS (5 tests).
 
 - [ ] **Step 5: Write the failing TextInput test**
 
 Create `tests/components/TextInput.test.tsx`:
 
 ```tsx
-import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { TextInput } from "@/components/TextInput";
+
+// jsdom has no matchMedia; a test that needs a touch screen defines it.
+function touchScreen() {
+  vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(pointer: coarse)" }));
+}
+afterEach(() => vi.unstubAllGlobals());
 
 describe("TextInput", () => {
   it("reports typing", async () => {
@@ -1117,6 +1168,22 @@ describe("TextInput", () => {
     render(<TextInput value="" maxChars={4000} lang="de" onChange={() => {}} onSubmit={() => {}} />);
     expect(screen.getByText(/Zeilenumbruch/)).toBeInTheDocument();
   });
+
+  it("does not submit while a character is being composed", () => {
+    const onSubmit = vi.fn();
+    render(<TextInput value="x" maxChars={4000} lang="en" onChange={() => {}} onSubmit={onSubmit} />);
+    fireEvent.keyDown(screen.getByRole("textbox"), { key: "Enter", isComposing: true });
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("on a touch screen Enter makes a line break and the hint is hidden", async () => {
+    touchScreen();
+    const onSubmit = vi.fn();
+    render(<TextInput value="x" maxChars={4000} lang="de" onChange={() => {}} onSubmit={onSubmit} />);
+    await userEvent.type(screen.getByRole("textbox"), "{Enter}");
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Zeilenumbruch/)).not.toBeInTheDocument();
+  });
 });
 ```
 
@@ -1129,8 +1196,10 @@ Expected: FAIL — cannot resolve `@/components/TextInput`.
 
 ```tsx
 "use client";
-// A textarea for open answers. Enter submits, Shift+Enter inserts a line
-// break (the Typeform convention), and a counter appears near the cap.
+// A textarea for open answers. On a keyboard, Enter submits and Shift+Enter
+// inserts a line break (the Typeform convention). On a touch screen there is
+// no Shift key, so Enter is a line break and the OK button submits. A counter
+// appears near the cap.
 import { t, type Lang } from "@/i18n";
 import { UI } from "@/texts";
 
@@ -1142,7 +1211,14 @@ type Props = {
   onSubmit: () => void;
 };
 
+// Phones and tablets report a coarse pointer. The form renders only in the
+// browser (it waits for localStorage), so reading window here is safe.
+function isTouchScreen(): boolean {
+  return typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches === true;
+}
+
 export function TextInput({ value, maxChars, lang, onChange, onSubmit }: Props) {
+  const touch = isTouchScreen();
   return (
     <div className="flex flex-col gap-2">
       <textarea
@@ -1152,15 +1228,15 @@ export function TextInput({ value, maxChars, lang, onChange, onSubmit }: Props) 
         maxLength={maxChars}
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={(event) => {
-          if (event.key === "Enter" && !event.shiftKey) {
-            event.preventDefault();
-            onSubmit();
-          }
+          if (event.key !== "Enter" || event.shiftKey || touch) return;
+          if (event.nativeEvent.isComposing) return; // an accent or a suggestion is being typed
+          event.preventDefault();
+          onSubmit();
         }}
         className="w-full rounded-lg border border-border bg-input p-3 text-lg outline-none focus:border-accent focus:ring-2 focus:ring-accent/30"
       />
       <div className="flex justify-between text-sm text-muted-foreground">
-        <span>{t(UI.shiftEnter, lang)}</span>
+        <span>{touch ? "" : t(UI.shiftEnter, lang)}</span>
         {value.length > maxChars - 500 && <span>{value.length} / {maxChars}</span>}
       </div>
     </div>
@@ -1171,7 +1247,7 @@ export function TextInput({ value, maxChars, lang, onChange, onSubmit }: Props) 
 - [ ] **Step 8: Run the TextInput test**
 
 Run: `npm test -- tests/components/TextInput.test.tsx`
-Expected: PASS (3 tests).
+Expected: PASS (5 tests).
 
 - [ ] **Step 9: Commit**
 
@@ -1193,6 +1269,7 @@ git commit -m "feat: choice and text inputs with keyboard handling"
 - Produces:
   - `<QuestionScreen question lang number initial? onSubmit onBack? />` — `number` is the 1-based position among active questions; `onSubmit(value: AnswerValue)` is called only with a valid value; `onBack` optional.
   - `<ProgressBar done total />`.
+  - Enter submits a choice question from anywhere on the page (added 2026-09-22; the spec's "Enter submits" held only for text before).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1249,6 +1326,16 @@ describe("QuestionScreen", () => {
     await userEvent.click(screen.getByRole("button", { name: "Back" }));
     expect(onBack).toHaveBeenCalled();
   });
+
+  it("Enter submits a choice question too, even with an option focused", async () => {
+    const onSubmit = vi.fn();
+    render(<QuestionScreen question={q("role")} lang="en" number={1} onSubmit={onSubmit} />);
+    await userEvent.click(screen.getByRole("radio", { name: /Sales/ })); // leaves focus on the option
+    await userEvent.keyboard("{Enter}");
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit).toHaveBeenCalledWith({ option: "sales" });
+    expect(screen.getByRole("radio", { name: /Sales/ })).toHaveAttribute("aria-checked", "true");
+  });
 });
 ```
 
@@ -1280,9 +1367,9 @@ export function ProgressBar({ done, total }: Props) {
 // One question on one screen: number, title, helper line, the right input for
 // the question type, the validation error, Back and OK. Holds the draft
 // answer locally; hands a valid AnswerValue up through onSubmit.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Question } from "@/form";
-import { validate, type AnswerValue } from "@/engine";
+import { cleanAnswer, validate, wantsEmail, type AnswerValue } from "@/engine";
 import { t, type Lang } from "@/i18n";
 import { UI } from "@/texts";
 import { ChoiceInput } from "@/components/ChoiceInput";
@@ -1313,9 +1400,8 @@ export function QuestionScreen({ question, lang, number, initial, onSubmit, onBa
   function draft(): AnswerValue {
     if (question.type === "open") return { text: text.trim() };
     if (question.type === "single") return selected.length ? { option: selected[0] } : { options: [] };
-    const value: AnswerValue = { options: selected };
-    if (question.email && email.trim()) value.email = email.trim();
-    return value;
+    // cleanAnswer drops an e-mail the chosen options do not need
+    return cleanAnswer(question, { options: selected, email });
   }
 
   function submit() {
@@ -1325,11 +1411,23 @@ export function QuestionScreen({ question, lang, number, initial, onSubmit, onBa
     if (!problem) onSubmit(value);
   }
 
-  const wantsEmail =
-    question.type === "multi" &&
-    question.email !== undefined &&
-    selected.length > 0 &&
-    !(selected.length === 1 && selected[0] === question.email.unlessOption);
+  const showEmail = wantsEmail(question, selected);
+
+  // Enter submits a choice question from anywhere on the page. Text areas and
+  // the e-mail field handle Enter themselves. preventDefault stops the focused
+  // option button from also toggling on the same key press.
+  useEffect(() => {
+    if (question.type === "open") return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key !== "Enter" || event.isComposing) return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
+      event.preventDefault();
+      submit();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
 
   return (
     <section className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-16">
@@ -1354,14 +1452,16 @@ export function QuestionScreen({ question, lang, number, initial, onSubmit, onBa
         />
       )}
 
-      {wantsEmail && question.type === "multi" && question.email && (
+      {showEmail && question.type === "multi" && question.email && (
         <label className="flex flex-col gap-1">
           <span className="text-sm text-muted-foreground">{t(question.email.label, lang)}</span>
           <input
             type="email"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
-            onKeyDown={(event) => event.key === "Enter" && submit()}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.nativeEvent.isComposing) submit();
+            }}
             className="rounded-lg border border-border bg-input p-3 text-lg outline-none focus:border-accent focus:ring-2 focus:ring-accent/30"
           />
         </label>
@@ -1387,7 +1487,7 @@ export function QuestionScreen({ question, lang, number, initial, onSubmit, onBa
 - [ ] **Step 5: Run the QuestionScreen test**
 
 Run: `npm test -- tests/components/QuestionScreen.test.tsx`
-Expected: PASS (5 tests).
+Expected: PASS (6 tests).
 
 - [ ] **Step 6: Commit**
 
@@ -1440,9 +1540,9 @@ describe("Form", () => {
 
   it("switches language on the welcome screen", async () => {
     render(<Form initialLang="de" />);
-    expect(screen.getByText(/Schweizer Unternehmen/)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Schweizer Unternehmen/ })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "English" }));
-    expect(screen.getByText(/Swiss firms/)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Swiss firms/ })).toBeInTheDocument();
     expect(document.documentElement.lang).toBe("en");
   });
 
@@ -1479,6 +1579,56 @@ describe("Form", () => {
     await userEvent.click(screen.getByRole("button", { name: "OK" }));
     await userEvent.click(screen.getByRole("button", { name: "Back" }));
     expect(screen.getByRole("radio", { name: /Sales/ })).toBeChecked();
+  });
+
+  it("OK after Back walks forward one screen, not to the first unanswered", async () => {
+    await start("en");
+    await userEvent.click(screen.getByRole("radio", { name: /Sales/ }));
+    await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    await userEvent.click(screen.getByRole("radio", { name: /10–49/ }));
+    await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    await userEvent.click(screen.getByRole("button", { name: "Back" }));
+    await userEvent.click(screen.getByRole("button", { name: "Back" }));
+    await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    expect(screen.getByText(/How many people/)).toBeInTheDocument();
+  });
+
+  it("drops the case answer when relations is changed to none", async () => {
+    await start("en");
+    await userEvent.click(screen.getByRole("radio", { name: /Sales/ }));
+    await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    await userEvent.click(screen.getByRole("radio", { name: /10–49/ }));
+    await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: /a new customer/ }));
+    await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    await userEvent.type(screen.getByRole("textbox"), "I asked a colleague.{Enter}");
+    await userEvent.click(screen.getByRole("button", { name: "Back" }));
+    await userEvent.click(screen.getByRole("button", { name: "Back" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: /a new customer/ }));
+    await userEvent.click(screen.getByRole("checkbox", { name: /none of these/ }));
+    await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    expect(screen.getByText(/where does it get stuck/)).toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem("interview-form")!).answers.case).toBeUndefined();
+  });
+
+  it("ArrowUp inside a text answer moves the cursor, it does not go back", async () => {
+    await start("en");
+    await userEvent.click(screen.getByRole("radio", { name: /Sales/ }));
+    await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    await userEvent.click(screen.getByRole("radio", { name: /10–49/ }));
+    await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: /a new customer/ }));
+    await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    await userEvent.type(screen.getByRole("textbox"), "first line{Shift>}{Enter}{/Shift}second{ArrowUp}");
+    expect(screen.getByText(/most recent case/)).toBeInTheDocument();
+  });
+
+  it("ArrowUp elsewhere goes back", async () => {
+    await start("en");
+    await userEvent.click(screen.getByRole("radio", { name: /Sales/ }));
+    await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    await userEvent.keyboard("{ArrowUp}");
+    expect(screen.getByText(/Your role/)).toBeInTheDocument();
   });
 });
 ```
@@ -1564,9 +1714,12 @@ export function ThankYou({ lang }: { lang: Lang }) {
 // answers and the language; asks the engine which question comes next;
 // mirrors everything to localStorage so a refresh resumes. Keyboard: ArrowUp
 // goes back. No network in M1 — M2 adds the server calls here.
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { FORM, FORM_VERSION } from "@/form";
-import { nextQuestion, previousQuestion, progress, type Answers, type AnswerValue } from "@/engine";
+import {
+  applyAnswer, nextQuestion, previousQuestion, progress, pruneSkipped, questionAfter, questionNumber,
+  type Answers, type AnswerValue,
+} from "@/engine";
 import type { Lang } from "@/i18n";
 import { loadSaved, saveSaved, type Stage } from "@/storage";
 import { ProgressBar } from "@/components/ProgressBar";
@@ -1576,28 +1729,43 @@ import { Welcome } from "@/components/Welcome";
 
 type Props = { initialLang: Lang };
 
+// true in the browser, false while Next.js renders the page on the server
+const noSubscription = () => () => {};
+function useInBrowser(): boolean {
+  return useSyncExternalStore(noSubscription, () => true, () => false);
+}
+
+/**
+ * The server sends an empty page; the form itself is built only in the
+ * browser, because its first state comes from localStorage, which the server
+ * does not have.
+ */
 export function Form({ initialLang }: Props) {
-  const [lang, setLang] = useState<Lang>(initialLang);
-  const [stage, setStage] = useState<Stage>("welcome");
-  const [answers, setAnswers] = useState<Answers>({});
-  const [currentId, setCurrentId] = useState<string | null>(null);
-  const [loaded, setLoaded] = useState(false);
+  return useInBrowser() ? <FormInBrowser initialLang={initialLang} /> : <main />;
+}
 
-  // Resume once, after mount (localStorage does not exist on the server).
-  useEffect(() => {
-    const saved = loadSaved();
-    if (saved) {
-      setLang(saved.lang);
-      setStage(saved.stage);
-      setAnswers(saved.answers);
-      setCurrentId(saved.stage === "questions" ? (nextQuestion(FORM, saved.answers)?.id ?? null) : null);
-    }
-    setLoaded(true);
-  }, []);
+type Start = { lang: Lang; stage: Stage; answers: Answers; currentId: string | null };
+
+// Where to begin: the saved state if there is one, else the welcome screen.
+function restore(initialLang: Lang): Start {
+  const saved = loadSaved();
+  if (!saved) return { lang: initialLang, stage: "welcome", answers: {}, currentId: null };
+  const answers = pruneSkipped(FORM, saved.answers); // never trust stored state blindly
+  const currentId = saved.stage === "questions" ? (nextQuestion(FORM, answers)?.id ?? null) : null;
+  return { lang: saved.lang, stage: saved.stage, answers, currentId };
+}
+
+function FormInBrowser({ initialLang }: Props) {
+  // read localStorage once, on the first render (the function form of useState)
+  const [start] = useState(() => restore(initialLang));
+  const [lang, setLang] = useState<Lang>(start.lang);
+  const [stage, setStage] = useState<Stage>(start.stage);
+  const [answers, setAnswers] = useState<Answers>(start.answers);
+  const [currentId, setCurrentId] = useState<string | null>(start.currentId);
 
   useEffect(() => {
-    if (loaded) saveSaved({ version: FORM_VERSION, lang, stage, answers });
-  }, [loaded, lang, stage, answers]);
+    saveSaved({ version: FORM_VERSION, lang, stage, answers });
+  }, [lang, stage, answers]);
 
   useEffect(() => {
     document.documentElement.lang = lang;
@@ -1613,33 +1781,37 @@ export function Form({ initialLang }: Props) {
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
-      if (event.key === "ArrowUp" && stage === "questions") goBack();
+      if (event.key !== "ArrowUp" || stage !== "questions") return;
+      // inside a text answer or the e-mail field, ArrowUp moves the cursor
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
+      goBack();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  function start() {
+  function begin() {
     setStage("questions");
     setCurrentId(nextQuestion(FORM, answers)?.id ?? null);
   }
 
   function submit(value: AnswerValue) {
     if (!current) return;
-    const updated = { ...answers, [current.id]: value };
+    // applyAnswer cleans the value and drops answers the new one skips
+    const updated = applyAnswer(FORM, answers, current.id, value);
     setAnswers(updated);
-    const next = nextQuestion(FORM, updated);
+    // walk forward screen by screen (also after Back); at the end, pick up
+    // anything a changed answer un-skipped
+    const next = questionAfter(FORM, updated, current.id) ?? nextQuestion(FORM, updated);
     if (next) setCurrentId(next.id);
     else setStage("done");
   }
 
-  if (!loaded) return <main />;
-
-  if (stage === "welcome") return <main><Welcome lang={lang} onLang={setLang} onStart={start} /></main>;
+  if (stage === "welcome") return <main><Welcome lang={lang} onLang={setLang} onStart={begin} /></main>;
   if (stage === "done" || !current) return <main><ThankYou lang={lang} /></main>;
 
   const { done, total } = progress(FORM, answers);
-  const number = FORM.questions.filter((q) => !(FORM.skips.some((s) => s.skip.includes(q.id) && (answers[s.when.question] && "options" in answers[s.when.question] && (answers[s.when.question] as { options: string[] }).options.includes(s.when.is))))).findIndex((q) => q.id === current.id) + 1;
 
   return (
     <main>
@@ -1648,7 +1820,7 @@ export function Form({ initialLang }: Props) {
         key={current.id}
         question={current}
         lang={lang}
-        number={number}
+        number={questionNumber(FORM, answers, current.id)}
         initial={answers[current.id]}
         onSubmit={submit}
         onBack={previousQuestion(FORM, answers, current.id) ? goBack : undefined}
@@ -1658,29 +1830,12 @@ export function Form({ initialLang }: Props) {
 }
 ```
 
-The `number` line above is deliberately ugly so you notice it: replace it with the engine before committing — add to `src/engine.ts`:
-
-```ts
-export function questionNumber(form: Form, answers: Answers, questionId: string): number {
-  return activeQuestions(form, answers).findIndex((q) => q.id === questionId) + 1;
-}
-```
-
-and in `Form.tsx` use `const number = questionNumber(FORM, answers, current.id);` (import it). Add to `tests/engine.test.ts`:
-
-```ts
-describe("questionNumber", () => {
-  it("numbers active questions from one", () => {
-    expect(questionNumber(FORM, {}, "role")).toBe(1);
-    expect(questionNumber(FORM, { relations: { options: ["none"] } }, "pains")).toBe(4);
-  });
-});
-```
+`questionNumber` lives in `src/engine.ts` (tested in `tests/engine.test.ts`). As built (2026-09-22): the form is created only in the browser (`useSyncExternalStore`) and restores localStorage in a `useState` initializer, which the React lint rule `set-state-in-effect` requires; ArrowUp inside a text field or the e-mail field moves the cursor instead of going back.
 
 - [ ] **Step 6: Run all tests**
 
 Run: `npm test`
-Expected: PASS — smoke 1, i18n 3, form 7, engine 13, storage 5, ChoiceInput 4, TextInput 3, QuestionScreen 5, Form 5.
+Expected: PASS — smoke 1, i18n 3, form 8, engine 27, storage 7, ChoiceInput 5, TextInput 5, QuestionScreen 6, Form 9.
 
 - [ ] **Step 7: Lint and build, then try it by hand**
 

@@ -155,7 +155,9 @@ runs without the network and is unit-tested.
 
 One question per screen, like Typeform: question in large type, helper line
 in muted grey, the input, an **OK** button, `Enter` submits (`Shift+Enter` for
-a new line in text areas), key hints `A B C` on choices, a thin progress bar
+a new line in text areas; on a touch screen, which has no Shift key, `Enter`
+is a new line and OK submits), key hints `A B C` on choices (ignored while
+Cmd, Ctrl or Alt is held), a thin progress bar
 at the top, up/down arrows bottom right, language toggle on the welcome
 screen only. Follow-up questions appear on the same screen below the answer,
 with the answer shown read-only above; while the model is called, a small
@@ -164,18 +166,27 @@ with the answer shown read-only above; while the model is called, a small
 Mobile first. Visible focus ring, labelled inputs, `prefers-reduced-motion`
 honoured. `<meta name="robots" content="noindex">`.
 
-Theme tokens (CSS variables):
+Theme tokens (CSS variables, updated 2026-09-22). Colours follow the product
+mockup: one navy on slate and white. The interaction follows Typeform.
 
 | Token | Value |
 |---|---|
 | `--background` | `#ffffff` |
-| `--foreground` | `#030213` |
-| `--muted` | `#ececf0` |
-| `--muted-foreground` | `#717182` |
-| `--accent` | `#2563eb` (progress bar, focus ring, links) |
-| `--border` | `rgba(0,0,0,.10)` |
-| `--input-background` | `#f3f3f5` |
+| `--wash` | `#f8fafc` (slate-50; page gradient from the top) |
+| `--foreground` | `#0f172b` (slate-900; question text) |
+| `--body` | `#45556c` (slate-600; helper and intro text) |
+| `--muted-foreground` | `#62748e` (slate-500; hints) |
+| `--border` | `#e2e8f0` (slate-200) |
+| `--accent` | `#1c398e` (blue-900; buttons, answers, choices, progress, focus) |
+| `--accent-hover` | `#193cb8` (blue-800) |
+| `--danger` | `#c70036` (errors only) |
 | `--radius` | `.625rem` |
+
+System font, no web font. Open answers are underlined, not boxed: large navy
+text on a line that turns solid on focus and grows with the text. A chosen
+option fills its key badge, shows a tick and blinks twice. Each screen slides
+in from below, or from above after Back (450 ms); the question number sits
+beside the question with a small arrow; up/down buttons bottom right.
 | font | `ui-sans-serif, system-ui, sans-serif` |
 
 ## 7. Data model (Supabase, `supabase/migrations/`)
@@ -253,6 +264,19 @@ safe. A second `POST /api/responses` from the same browser is prevented by
 the stored id. A response can be resumed for 7 days; the daily cron deletes
 responses with `completed_at is null` older than that, which is the promise
 the consent text makes ("unfinished answers are deleted").
+
+**One rule for what an answer set contains** (added 2026-09-22, M1). The
+browser and the server call the same pure function, `applyAnswer` in
+`src/engine.ts`: it cleans the value (an e-mail address is dropped when the
+options chosen do not need one — typed and then opted out of, it is not
+kept) and removes the answers to every question the new answer skips. On the
+server, `POST /api/responses/:id/answers` loads the fixed answers
+(`followup_index = 0`), runs `applyAnswer`, and in one transaction upserts
+the new row and deletes every row, at every `followup_index`, of the
+questions it pruned. `probe_calls` rows stay: they record what happened.
+Submitting an unchanged answer again (walking forward after Back) writes
+nothing and never calls the probe. The export reads only answers to active
+questions, as a second guard.
 
 ## 9. The AI probe (`src/probe.ts`, `prompts/probe.md`)
 
@@ -393,6 +417,12 @@ Vercel Authentication; production is public but `noindex`. Locally:
 - Retention of raw answers after submission — ethics approval.
 - Native-speaker check of the German texts before the pilot.
 - HMAC-signed `c` tag (optional, only if misattribution ever matters).
+- Editing a probed answer after its follow-ups (M3 plan decides). The
+  participant goes back and changes the fixed answer to `case`, `pains` or
+  `gains`; the follow-ups were asked about the old text. Proposed default:
+  the limit counts model calls, not follow-ups shown, so the invariant in §4
+  holds; the earlier follow-up answers stay (each is stored with the question
+  text it answered); the edited answer is probed again only if calls remain.
 
 ## 16. Audit trace
 
