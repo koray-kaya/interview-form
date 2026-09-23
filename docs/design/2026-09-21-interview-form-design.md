@@ -304,11 +304,32 @@ z.object({
 })
 ```
 
-Model from `AI_GATEWAY_MODEL`; fallback model list through the gateway
-provider options; `maxRetries: 1`; one `AbortSignal` with a 12-second total
-deadline across primary and fallback (8 s until 2026-09-23; see the measurement
-below). No `temperature` (Sonnet 5 does not
-expose it).
+Built with AI SDK 7, whose names differ from earlier versions: the schema is
+passed as `output: Output.object({ schema })`, the prompt file goes in
+`instructions` (was `system`), and the deadline is `timeout: { totalMs }`.
+The model is named in the code, not in an environment variable
+(`PRIMARY_MODEL` in `src/probe.ts`); the fallback comes from
+`providerOptions.gateway.models`, and `disallowPromptTraining: true` is set on
+every call, which makes the consent sentence "not used to train models" true by
+construction — the gateway refuses to route to a provider that may train.
+`maxRetries: 1`; one deadline of 12 seconds covers primary and fallback
+(8 s until 2026-09-23). No `temperature` (Sonnet 5 does not expose it);
+`reasoning: "low"`, chosen by measurement.
+
+**Measured on 2026-09-23** against the thirty eval fixtures, sixty calls with
+the eval's own deadline raised to 30 s so that nothing was cut off:
+
+| | `provider-default` | `low` |
+|---|---|---|
+| completed calls deciding as the criterion demands | 50 / 50 | 60 / 60 |
+| follow-ups the post-check had to reject | 0 | 0 |
+| median latency | 3 189 ms | 2 338 ms |
+| mean follow-up length | 101 characters | 97 characters |
+
+The latency is bimodal: fifty-two calls between 1.5 s and 4.7 s, eight between
+8.4 s and 12.6 s, nothing in between. The 12-second deadline therefore slows no
+call down; it only changes the outcome for the second group, who at 8 s waited
+the longest and got nothing. The two regimes are open as issue #12.
 
 **Rules in the prompts** (the three prompt files are the source; this is the
 summary, rewritten 2026-09-22 for Claude Sonnet 5, which follows
@@ -430,12 +451,13 @@ Vercel Authentication; production is public but `noindex`. Locally:
 - Retention of raw answers after submission — ethics approval.
 - Native-speaker check of the German texts before the pilot.
 - HMAC-signed `c` tag (optional, only if misattribution ever matters).
-- Editing a probed answer after its follow-ups (M3 plan decides). The
-  participant goes back and changes the fixed answer to `case`, `pains` or
-  `gains`; the follow-ups were asked about the old text. Proposed default:
-  the limit counts model calls, not follow-ups shown, so the invariant in §4
-  holds; the earlier follow-up answers stay (each is stored with the question
-  text it answered); the edited answer is probed again only if calls remain.
+**Settled since.** Editing a probed answer after its follow-ups (2026-09-22,
+M3 plan): the limit counts model calls, not follow-ups shown, so the invariant
+in §4 holds; earlier follow-up answers stay, each stored with the question text
+it answered; an edited answer is judged again only if a call remains. The
+language may be changed while answering (2026-09-23, issue #9): it travels with
+each answer, so `responses.lang` means "the language last used" and each answer
+keeps the wording the person saw.
 
 ## 16. Audit trace
 
