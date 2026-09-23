@@ -19,6 +19,8 @@ export type Resumed = {
   formVersion: string;
   completed: boolean;
   answered: { questionId: string; followupIndex: number; questionText: string; value: AnswerValue }[];
+  /** Follow-ups the participant saw but did not answer; the screen shows them again. */
+  pending: { questionId: string; index: number; text: string }[];
 };
 
 async function send(path: string, init: RequestInit): Promise<Response> {

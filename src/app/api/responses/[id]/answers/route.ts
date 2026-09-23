@@ -4,7 +4,7 @@
 // The question text stored with the answer comes from the form, never from
 // the request. Follow-ups (followupIndex 1–2) arrive in M3.
 import { z } from "zod";
-import { countProbeCalls, getResponse, logProbeCall, saveAnswer, setLang, type AnswerRow } from "@/db";
+import { askedFollowUps, countProbeCalls, getResponse, logProbeCall, saveAnswer, setLang, type AnswerRow, type ResponseRow } from "@/db";
 import { AnswerValueSchema, applyAnswer, isSkipped, sameAnswer, validate, type AnswerValue } from "@/engine";
 import { FORM, type OpenQuestion, type Question } from "@/form";
 import { probeEnabled } from "@/env";
@@ -15,7 +15,8 @@ import { fixedAnswers } from "@/responses";
 
 const Body = z.object({
   questionId: z.string().max(64),
-  followupIndex: z.literal(0),
+  /** 0 is the question itself; 1 and 2 are the answers to the model's follow-ups. */
+  followupIndex: z.union([z.literal(0), z.literal(1), z.literal(2)]),
   value: AnswerValueSchema,
   /** The language on screen when the answer was given; absent means unchanged. */
   lang: z.enum(["de", "en"]).optional(),
@@ -42,6 +43,10 @@ export async function POST(request: Request, { params }: Context): Promise<Respo
   const lang = parsed.data.lang ?? found.response.lang;
   if (lang !== found.response.lang) await setLang(id, lang);
 
+  if (parsed.data.followupIndex > 0) {
+    return await storeFollowUp({ id, question, index: parsed.data.followupIndex, value, lang, found });
+  }
+
   const before = fixedAnswers(found.answers);
   if (isSkipped(FORM, questionId, before)) return json(400, { error: "question not active" });
 
@@ -65,19 +70,79 @@ export async function POST(request: Request, { params }: Context): Promise<Respo
   });
   if (!saved) return json(409, { error: "response already completed" });
 
-  const followUp = await probeAnswer({ id, question, lang, text: cleaned, rows: found.answers, allowed: found.response.probe_allowed });
+  const rows = withRow(found.answers, {
+    question_id: questionId,
+    followup_index: 0,
+    question_text: t(question.text, lang),
+    value: cleaned,
+  });
+  const followUp = await probeAnswer({ id, question, lang, rows, allowed: found.response.probe_allowed });
   return json(200, { followUp });
 }
 
-const written = (value: AnswerValue | undefined): string => (value && "text" in value ? value.text : "");
+/**
+ * The answer to one of the model's follow-ups. The question text is read from
+ * the probe_calls row that asked it, never from the request: the server
+ * decides what the participant saw. Answering it may earn a second follow-up,
+ * if the question has a model call left.
+ */
+async function storeFollowUp(input: {
+  id: string;
+  question: Question;
+  index: number;
+  value: AnswerValue;
+  lang: Lang;
+  found: { response: ResponseRow; answers: AnswerRow[] };
+}): Promise<Response> {
+  const { id, question, index, value, lang, found } = input;
+  if (!isProbed(question)) return json(400, { error: "question not active" });
 
-/** The question and its answer, then each follow-up that was asked and answered. */
-function transcript(questionId: string, asked: string, answer: string, rows: AnswerRow[]): Turn[] {
-  const followUps = rows
-    .filter((row) => row.question_id === questionId && row.followup_index > 0)
+  const asked = await askedFollowUps(id);
+  const match = asked.find((row) => row.question_id === question.id && row.followup_index === index);
+  if (!match) return json(400, { error: "follow-up not asked" });
+  if (found.answers.some((row) => row.question_id === question.id && row.followup_index === index)) {
+    return json(400, { error: "follow-up already answered" });
+  }
+
+  const problem = validate(question, value, lang);
+  if (problem) return json(400, { error: problem });
+
+  const saved = await saveAnswer({
+    responseId: id,
+    questionId: question.id,
+    followupIndex: index,
+    questionText: match.followup_text,
+    value,
+    pruned: [],
+  });
+  if (!saved) return json(409, { error: "response already completed" });
+
+  const rows = withRow(found.answers, {
+    question_id: question.id,
+    followup_index: index,
+    question_text: match.followup_text,
+    value,
+  });
+  const followUp = await probeAnswer({ id, question, lang, rows, allowed: found.response.probe_allowed });
+  return json(200, { followUp });
+}
+
+/** The stored rows with one of them replaced by the row just written. */
+function withRow(rows: AnswerRow[], written: AnswerRow): AnswerRow[] {
+  const others = rows.filter(
+    (row) => !(row.question_id === written.question_id && row.followup_index === written.followup_index),
+  );
+  return [...others, written];
+}
+
+const answerText = (value: AnswerValue | undefined): string => (value && "text" in value ? value.text : "");
+
+/** One question's whole exchange: the question and its answer, then each follow-up. */
+function transcript(questionId: string, rows: AnswerRow[]): Turn[] {
+  return rows
+    .filter((row) => row.question_id === questionId)
     .sort((a, b) => a.followup_index - b.followup_index)
-    .map((row) => ({ question: row.question_text, answer: written(row.value) }));
-  return [{ question: asked, answer }, ...followUps];
+    .map((row) => ({ question: row.question_text, answer: answerText(row.value) }));
 }
 
 const isProbed = (question: Question): question is OpenQuestion & { probe: NonNullable<OpenQuestion["probe"]> } =>
@@ -92,7 +157,6 @@ async function probeAnswer(input: {
   id: string;
   question: Question;
   lang: Lang;
-  text: AnswerValue;
   rows: AnswerRow[];
   allowed: boolean;
 }): Promise<{ index: number; text: string } | null> {
@@ -106,13 +170,8 @@ async function probeAnswer(input: {
   const result = await runProbe({
     question,
     lang,
-    transcript: transcript(question.id, t(question.text, lang), written(input.text), rows),
-    context: (question.probe.context ?? []).flatMap((earlier) => {
-      const answered = FORM.questions.find((q) => q.id === earlier);
-      const fixed = rows.find((row) => row.question_id === earlier && row.followup_index === 0);
-      if (!answered || !fixed) return [];
-      return transcript(earlier, t(answered.text, lang), written(fixed.value), rows);
-    }),
+    transcript: transcript(question.id, rows),
+    context: (question.probe.context ?? []).flatMap((earlier) => transcript(earlier, rows)),
   });
 
   await logProbeCall({

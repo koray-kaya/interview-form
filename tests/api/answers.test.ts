@@ -9,6 +9,7 @@ vi.mock("@/db", () => ({
   setLang: vi.fn(async () => {}),
   countProbeCalls: vi.fn(async () => 0),
   logProbeCall: vi.fn(async () => {}),
+  askedFollowUps: vi.fn(async () => []),
 }));
 vi.mock("@/probe", () => ({ runProbe: vi.fn() }));
 import * as db from "@/db";
@@ -46,7 +47,10 @@ function answer(body: unknown, id = ID) {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.unstubAllEnvs();
+  // clearAllMocks forgets the calls but keeps the implementations, so a
+  // mockResolvedValue set in one test would otherwise leak into the next
   vi.mocked(db.countProbeCalls).mockResolvedValue(0);
+  vi.mocked(db.askedFollowUps).mockResolvedValue([]);
 });
 
 /** A response whose invitation carried a valid UID, with probing switched on. */
@@ -145,6 +149,55 @@ describe("POST /api/responses/:id/answers — the probe", () => {
     probeable([row("case", { text: "We looked into a new supplier." })]);
     await answer(caseAnswer);
     expect(probe.runProbe).not.toHaveBeenCalled();
+  });
+
+  it("stores a follow-up answer with the question text the model wrote", async () => {
+    probeable([row("case", { text: "We looked into a new supplier." })]);
+    vi.mocked(db.askedFollowUps).mockResolvedValue([
+      { question_id: "case", followup_index: 1, followup_text: "Where did you look?" },
+    ]);
+    vi.mocked(db.countProbeCalls).mockResolvedValue(1);
+    decides({ decision: "stop", followUp: undefined });
+    const response = await answer({ questionId: "case", followupIndex: 1, value: { text: "The register." } });
+    expect(response.status).toBe(200);
+    expect(vi.mocked(db.saveAnswer).mock.calls[0][0]).toMatchObject({
+      followupIndex: 1,
+      questionText: "Where did you look?",
+      value: { text: "The register." },
+    });
+  });
+
+  it("refuses a follow-up that was never asked", async () => {
+    probeable([row("case", { text: "We looked into a new supplier." })]);
+    const response = await answer({ questionId: "case", followupIndex: 1, value: { text: "The register." } });
+    expect(response.status).toBe(400);
+    expect(db.saveAnswer).not.toHaveBeenCalled();
+  });
+
+  it("refuses a follow-up that was already answered", async () => {
+    probeable([
+      row("case", { text: "We looked into a new supplier." }),
+      { question_id: "case", followup_index: 1, question_text: "Where did you look?", value: { text: "The register." } },
+    ]);
+    vi.mocked(db.askedFollowUps).mockResolvedValue([
+      { question_id: "case", followup_index: 1, followup_text: "Where did you look?" },
+    ]);
+    const response = await answer({ questionId: "case", followupIndex: 1, value: { text: "Again." } });
+    expect(response.status).toBe(400);
+    expect(db.saveAnswer).not.toHaveBeenCalled();
+  });
+
+  it("judges the follow-up answer too, while a call is left", async () => {
+    probeable([row("case", { text: "We looked into a new supplier." })]);
+    vi.mocked(db.askedFollowUps).mockResolvedValue([
+      { question_id: "case", followup_index: 1, followup_text: "Where did you look?" },
+    ]);
+    vi.mocked(db.countProbeCalls).mockResolvedValue(1);
+    decides({ followUp: "Which register was that?" });
+    const response = await answer({ questionId: "case", followupIndex: 1, value: { text: "The register." } });
+    expect(await response.json()).toEqual({ followUp: { index: 2, text: "Which register was that?" } });
+    const [input] = vi.mocked(probe.runProbe).mock.calls[0];
+    expect(input.transcript.map((turn) => turn.answer)).toEqual(["We looked into a new supplier.", "The register."]);
   });
 
   it("sends the answer and the earlier follow-ups to the model, in order", async () => {

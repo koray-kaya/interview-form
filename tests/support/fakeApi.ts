@@ -39,6 +39,7 @@ export const fakeApi = {
       lang: stored.lang,
       formVersion: FORM_VERSION,
       completed: stored.completed,
+      pending: [],
       answered: Object.entries(stored.answers).map(([questionId, value]) => ({
         questionId, followupIndex: 0, questionText: "…", value,
       })),
