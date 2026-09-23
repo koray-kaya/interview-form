@@ -165,7 +165,7 @@ welcome screen and, quieter, on the question screens — someone who began in
 the wrong language would otherwise have to abandon the form (decided
 2026-09-23, issue #9). Follow-up questions appear on the same screen below the answer,
 with the answer shown read-only above; while the model is called, a small
-"one moment" indicator shows for at most 8 seconds.
+"one moment" indicator shows for at most 12 seconds.
 
 Mobile first. Visible focus ring, labelled inputs, `prefers-reduced-motion`
 honoured. `<meta name="robots" content="noindex">`.
@@ -305,8 +305,9 @@ z.object({
 ```
 
 Model from `AI_GATEWAY_MODEL`; fallback model list through the gateway
-provider options; `maxRetries: 1`; one `AbortSignal` with an 8-second total
-deadline across primary and fallback. No `temperature` (Sonnet 5 does not
+provider options; `maxRetries: 1`; one `AbortSignal` with a 12-second total
+deadline across primary and fallback (8 s until 2026-09-23; see the measurement
+below). No `temperature` (Sonnet 5 does not
 expose it).
 
 **Rules in the prompts** (the three prompt files are the source; this is the
@@ -447,7 +448,7 @@ Vercel Authentication; production is public but `noindex`. Locally:
 | Consent promises (P1) | §3 consent text; §10 |
 | Budget drain (P2) | §10 UID gate, WAF rule, alerts |
 | No post-check on generated text (P2) | §9 post-check |
-| Retry × timeout (P2) | §9 `maxRetries: 1`, 8-second deadline |
+| Retry × timeout (P2) | §9 `maxRetries: 1`, 12-second deadline |
 | Context for `pains`/`gains` (P2) | §3 probe criteria table |
 | Withdrawal path (P2) | §3 thank-you screen; §11 runbook |
 | Runbook (P2) | §11 |

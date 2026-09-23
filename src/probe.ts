@@ -64,8 +64,16 @@ export function postCheck(output: ProbeOutput): boolean {
 
 export const PRIMARY_MODEL = "anthropic/claude-sonnet-5";
 export const FALLBACK_MODEL = "anthropic/claude-haiku-4.5";
-/** One deadline covers the primary model and the fallback (design §9). */
-export const DEADLINE_MS = 8_000;
+/**
+ * One deadline covers the primary model and the fallback (design §9).
+ *
+ * Measured on 2026-09-23 with the deadline raised to 30 s, so nothing was cut
+ * off: of sixty calls, fifty-two finished between 1.5 s and 4.7 s and eight
+ * between 8.4 s and 12.6 s, with nothing in between. Raising the limit from
+ * 8 s to 12 s therefore slows no call down — it only decides the fate of that
+ * second group, who at 8 s waited the longest and got nothing for it.
+ */
+export const DEADLINE_MS = 12_000;
 
 export type ProbeResult = {
   decision: ProbeDecision;
@@ -80,10 +88,25 @@ export type ProbeResult = {
   outputTokens?: number;
 };
 
+/**
+ * How hard the model thinks before it answers. Deciding whether one element is
+ * present and writing one sentence is not deep work, and every extra second of
+ * thinking eats the participant's eight. Measured by the prompt evals.
+ */
+export type Reasoning = "provider-default" | "none" | "minimal" | "low" | "medium" | "high";
+
+/**
+ * Measured on 2026-09-23 against the thirty fixtures: "low" decided every
+ * completed call correctly, wrote questions of the same length and quality as
+ * the provider's default, and cut the median call from 3.2 s to 2.3 s.
+ */
+export const DEFAULT_REASONING: Reasoning = "low";
+
 export type ProbeOptions = {
   /** Injected by the tests; production passes nothing and gets the gateway. */
   model?: LanguageModel;
   timeoutMs?: number;
+  reasoning?: Reasoning;
 };
 
 /**
@@ -101,6 +124,7 @@ export async function runProbe(input: ProbeInput, options: ProbeOptions = {}): P
       prompt: buildPrompt(input),
       output: Output.object({ schema: ProbeOutputSchema }),
       maxRetries: 1,
+      reasoning: options.reasoning ?? DEFAULT_REASONING,
       timeout: { totalMs: options.timeoutMs ?? DEADLINE_MS },
       providerOptions: {
         gateway: { models: [FALLBACK_MODEL], disallowPromptTraining: true },

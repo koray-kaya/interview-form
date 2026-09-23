@@ -14,11 +14,11 @@ const input: ProbeInput = {
   transcript: [{ question: open("case").text.en, answer: "We looked into a new supplier." }],
 };
 
-/** A model that answers with the given JSON, and records the prompts it was sent. */
+/** A model that answers with the given JSON, and records what it was sent. */
 function modelReturning(json: string, sent: unknown[] = []) {
   return new MockLanguageModelV4({
-    doGenerate: async ({ prompt }) => {
-      sent.push(prompt);
+    doGenerate: async (options) => {
+      sent.push(options);
       return {
         content: [{ type: "text" as const, text: json }],
         finishReason: { unified: "stop" as const, raw: undefined },
@@ -154,6 +154,18 @@ describe("runProbe", () => {
     const prompt = JSON.stringify(sent[0]);
     expect(prompt).toContain("The researcher needs");
     expect(prompt).toContain("We looked into a new supplier.");
+  });
+
+  it("asks the model for the reasoning effort it was given", async () => {
+    const sent: unknown[] = [];
+    await runProbe(input, { model: modelReturning(answered({}), sent), reasoning: "low" });
+    expect((sent[0] as { reasoning?: string }).reasoning).toBe("low");
+  });
+
+  it("thinks briefly by default: the decision is small, the deadline is not", async () => {
+    const sent: unknown[] = [];
+    await runProbe(input, { model: modelReturning(answered({}), sent) });
+    expect((sent[0] as { reasoning?: string }).reasoning).toBe("low");
   });
 
   it("stops when nothing is missing", async () => {
