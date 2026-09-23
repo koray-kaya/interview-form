@@ -33,7 +33,8 @@ export type OpenQuestion = {
   text: Text;
   help?: Text;
   maxChars: number;
-  probe?: { maxFollowUps: number; missing: Text; context?: string[] };
+  /** AI follow-ups: at most maxFollowUps model calls; what the model looks for is in prompts/probe-<id>.md. */
+  probe?: { maxFollowUps: number; context?: string[] };
 };
 
 export type Question = SingleQuestion | MultiQuestion | OpenQuestion;
@@ -95,7 +96,6 @@ export const FORM: Form = {
       maxChars: 4000,
       probe: {
         maxFollowUps: 2,
-        missing: { de: "die einzelnen Schritte und die genutzten Quellen", en: "the steps taken and the sources used" },
       },
     },
     {
@@ -121,7 +121,6 @@ export const FORM: Form = {
       maxChars: 4000,
       probe: {
         maxFollowUps: 2,
-        missing: { de: "ein konkretes Beispiel — eine Situation, keine Verallgemeinerung", en: "a concrete example — a situation, not a generality" },
         context: ["case"],
       },
     },
@@ -135,7 +134,6 @@ export const FORM: Form = {
       maxChars: 4000,
       probe: {
         maxFollowUps: 2,
-        missing: { de: "warum das Ergebnis wichtig wäre — welche Entscheidung oder Handlung es verändern würde", en: "why the result would matter — what decision or action it would change" },
         context: ["case"],
       },
     },

@@ -5,6 +5,7 @@ import { FORM_VERSION } from "@/form";
 vi.mock("@/db", () => ({
   createResponse: vi.fn(async () => "3f1c2b7a-9d4e-4c1a-8b2f-0a1b2c3d4e5f"),
   getResponse: vi.fn(),
+  askedFollowUps: vi.fn(async () => []),
 }));
 import * as db from "@/db";
 import { POST } from "@/app/api/responses/route";
@@ -26,7 +27,10 @@ function resume(id: string) {
   return GET(new Request(`http://localhost/api/responses/${id}`), { params: Promise.resolve({ id }) });
 }
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.mocked(db.askedFollowUps).mockResolvedValue([]);
+});
 
 describe("POST /api/responses", () => {
   it("creates a response with the form version and no probing yet", async () => {
@@ -39,6 +43,12 @@ describe("POST /api/responses", () => {
       formVersion: FORM_VERSION,
       probeAllowed: false,
     });
+  });
+
+  it("allows probing only for a tag with a valid UID check digit", async () => {
+    const response = await create({ c: "CHE-123.456.788", lang: "de", consent: true });
+    expect(await response.json()).toEqual({ id: ID, probeAllowed: true });
+    expect(vi.mocked(db.createResponse).mock.calls[0][0]).toMatchObject({ companyUid: "CHE-123.456.788", probeAllowed: true });
   });
 
   it("stores no tag when c is missing or empty", async () => {
@@ -78,7 +88,41 @@ describe("GET /api/responses/:id", () => {
       formVersion: FORM_VERSION,
       completed: false,
       answered: [{ questionId: "role", followupIndex: 0, questionText: "Your role", value: { option: "sales" } }],
+      pending: [],
     });
+  });
+
+  it("returns a follow-up that was asked but not yet answered", async () => {
+    vi.mocked(db.getResponse).mockResolvedValue({
+      response: {
+        id: ID, company_uid: null, probe_allowed: true, lang: "en", form_version: FORM_VERSION,
+        consented_at: "2026-09-22T10:00:00Z", completed_at: null, created_at: "2026-09-22T10:00:00Z",
+      },
+      answers: [{ question_id: "case", followup_index: 0, question_text: "…", value: { text: "We looked." } }],
+    });
+    vi.mocked(db.askedFollowUps).mockResolvedValue([
+      { question_id: "case", followup_index: 1, followup_text: "Where did you look?" },
+    ]);
+    const body = await (await resume(ID)).json();
+    expect(body.pending).toEqual([{ questionId: "case", index: 1, text: "Where did you look?" }]);
+  });
+
+  it("leaves out a follow-up the participant has already answered", async () => {
+    vi.mocked(db.getResponse).mockResolvedValue({
+      response: {
+        id: ID, company_uid: null, probe_allowed: true, lang: "en", form_version: FORM_VERSION,
+        consented_at: "2026-09-22T10:00:00Z", completed_at: null, created_at: "2026-09-22T10:00:00Z",
+      },
+      answers: [
+        { question_id: "case", followup_index: 0, question_text: "…", value: { text: "We looked." } },
+        { question_id: "case", followup_index: 1, question_text: "Where did you look?", value: { text: "The register." } },
+      ],
+    });
+    vi.mocked(db.askedFollowUps).mockResolvedValue([
+      { question_id: "case", followup_index: 1, followup_text: "Where did you look?" },
+    ]);
+    const body = await (await resume(ID)).json();
+    expect(body.pending).toEqual([]);
   });
 
   it("answers 404 for an unknown or malformed id, without asking the database for the malformed one", async () => {

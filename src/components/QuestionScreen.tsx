@@ -22,6 +22,11 @@ type Props = {
   onBack?: () => void;
   /** Which way the participant moved to get here; sets the slide direction. */
   direction?: "forward" | "back";
+  /** The model's follow-up. While it is set, the box below belongs to it. */
+  asking?: string;
+  /** What the participant already wrote here: the answer, then each answered follow-up. */
+  given?: { question?: string; answer: string }[];
+  onFollowUp?: (value: AnswerValue) => Promise<string | null | void> | void;
 };
 
 function initialSelected(initial?: AnswerValue): string[] {
@@ -31,8 +36,11 @@ function initialSelected(initial?: AnswerValue): string[] {
   return [];
 }
 
-export function QuestionScreen({ question, lang, number, initial, onSubmit, onBack, direction = "forward" }: Props) {
-  const [text, setText] = useState(initial && "text" in initial ? initial.text : "");
+export function QuestionScreen({
+  question, lang, number, initial, onSubmit, onBack, direction = "forward", asking, given = [], onFollowUp,
+}: Props) {
+  // a follow-up starts from an empty box; the earlier answer is shown above it
+  const [text, setText] = useState(!asking && initial && "text" in initial ? initial.text : "");
   const [selected, setSelected] = useState<string[]>(initialSelected(initial));
   const [email, setEmail] = useState(initial && "email" in initial ? (initial.email ?? "") : "");
   const [error, setError] = useState<string | null>(null);
@@ -47,12 +55,13 @@ export function QuestionScreen({ question, lang, number, initial, onSubmit, onBa
 
   async function submit() {
     if (busy) return; // one save at a time
-    const value = draft();
+    // while a follow-up is on screen the box belongs to it, not to the question
+    const value = asking ? { text: text.trim() } : draft();
     const problem = validate(question, value, lang);
     setError(problem);
     if (problem) return;
     setBusy(true);
-    const serverProblem = await onSubmit(value);
+    const serverProblem = asking && onFollowUp ? await onFollowUp(value) : await onSubmit(value);
     // on success the next screen replaces this one; these updates then do nothing
     setBusy(false);
     setError(serverProblem ?? null);
@@ -93,6 +102,19 @@ export function QuestionScreen({ question, lang, number, initial, onSubmit, onBa
             <h1 className="text-2xl leading-snug text-foreground sm:text-[1.75rem]">{t(question.text, lang)}</h1>
             {question.help && <p className="mt-2 text-lg text-body">{t(question.help, lang)}</p>}
           </div>
+
+          {given.length > 0 && (
+            <div className="flex flex-col gap-5 border-l-2 border-accent/20 pl-4">
+              {given.map((earlier, index) => (
+                <div key={index} className="flex flex-col gap-1">
+                  {earlier.question && <p className="text-base text-body">{earlier.question}</p>}
+                  <p className="whitespace-pre-wrap text-lg text-accent/70">{earlier.answer}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {asking && <h2 className="text-xl leading-snug text-foreground sm:text-2xl">{asking}</h2>}
 
           {question.type === "open" ? (
             <TextInput value={text} maxChars={question.maxChars} lang={lang} onChange={setText} onSubmit={submit} />
@@ -140,7 +162,12 @@ export function QuestionScreen({ question, lang, number, initial, onSubmit, onBa
               {t(UI.ok, lang)}
               <Check className="h-4 w-4" />
             </button>
-            {busy && <span className="text-sm text-muted-foreground">{t(UI.saving, lang)}</span>}
+            {busy && (
+              <span className="text-sm text-muted-foreground">
+                {/* a probed question may be waiting for the model, which takes longer than a save */}
+                {t(question.type === "open" && question.probe ? UI.oneMoment : UI.saving, lang)}
+              </span>
+            )}
             {!busy && question.type !== "open" && (
               <span className="hidden text-sm text-muted-foreground sm:inline">{t(UI.pressEnter, lang)}</span>
             )}

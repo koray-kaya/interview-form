@@ -2,8 +2,9 @@
 // form version, whether the response is completed, and the answers so far.
 // The id is the only key to a response, so a malformed one never reaches the
 // database.
-import { getResponse } from "@/db";
+import { askedFollowUps, getResponse } from "@/db";
 import { isUuid, json, refuseCrossSite } from "@/http";
+import { pendingFollowUps } from "@/responses";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -27,5 +28,7 @@ export async function GET(request: Request, { params }: Context): Promise<Respon
       questionText: row.question_text,
       value: row.value,
     })),
+    // a follow-up the participant saw but did not answer: the screen shows it again
+    pending: pendingFollowUps(await askedFollowUps(id), found.answers),
   });
 }

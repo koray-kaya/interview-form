@@ -31,3 +31,11 @@ export function parseServerEnv(source: Record<string, string | undefined>): Serv
 export function serverEnv(): ServerEnv {
   return parseServerEnv(process.env);
 }
+
+/**
+ * The kill switch for the AI probe. Only the exact string "true" turns it on,
+ * so a missing or misspelt variable means no model calls at all.
+ */
+export function probeEnabled(): boolean {
+  return process.env.PROBE_ENABLED === "true";
+}

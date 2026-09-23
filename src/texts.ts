@@ -38,6 +38,7 @@ export const UI = {
   },
   inTouch: { de: "Ich melde mich per E-Mail bei Ihnen.", en: "I will be in touch by e-mail." },
   saving: { de: "Speichern …", en: "Saving …" },
+  oneMoment: { de: "Einen Moment …", en: "One moment …" },
   saveFailed: {
     de: "Ihre Antwort konnte nicht gespeichert werden. Bitte prüfen Sie die Verbindung und drücken Sie erneut OK.",
     en: "Your answer could not be saved. Please check your connection and press OK again.",

@@ -168,3 +168,51 @@ export async function readAll(): Promise<{ responses: unknown[]; answers: unknow
     probe_calls: must(probeCalls, "readAll probe_calls"),
   };
 }
+
+export type ProbeDecision = "ask" | "stop" | "error" | "rejected";
+
+export type ProbeCallRow = {
+  response_id: string;
+  question_id: string;
+  followup_index: number;
+  model: string;
+  prompt_version: string;
+  decision: ProbeDecision;
+  followup_text: string | null;
+  reason: string | null;
+  error_class: string | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  latency_ms: number | null;
+};
+
+/** Model calls already made for one question of one response (the limit counts these). */
+export async function countProbeCalls(responseId: string, questionId: string): Promise<number> {
+  const result = await db()
+    .from("probe_calls")
+    .select("id", { count: "exact", head: true })
+    .eq("response_id", responseId)
+    .eq("question_id", questionId);
+  if (result.error) throw new Error(`countProbeCalls failed: ${result.error.message}`);
+  return result.count ?? 0;
+}
+
+export async function logProbeCall(row: ProbeCallRow): Promise<void> {
+  check(await db().from("probe_calls").insert(row), "logProbeCall");
+}
+
+/** Every follow-up question that was shown ("ask"), in order. */
+export async function askedFollowUps(
+  responseId: string,
+): Promise<{ question_id: string; followup_index: number; followup_text: string }[]> {
+  return must(
+    await db()
+      .from("probe_calls")
+      .select("question_id, followup_index, followup_text")
+      .eq("response_id", responseId)
+      .eq("decision", "ask")
+      .not("followup_text", "is", null)
+      .order("created_at"),
+    "askedFollowUps",
+  ) as { question_id: string; followup_index: number; followup_text: string }[];
+}

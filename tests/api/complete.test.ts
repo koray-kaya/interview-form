@@ -2,7 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AnswerRow, ResponseRow } from "@/db";
 import { FORM_VERSION } from "@/form";
 
-vi.mock("@/db", () => ({ getResponse: vi.fn(), completeResponse: vi.fn(async () => "2026-09-22T11:00:00Z") }));
+vi.mock("@/db", () => ({
+  getResponse: vi.fn(),
+  completeResponse: vi.fn(async () => "2026-09-22T11:00:00Z"),
+  askedFollowUps: vi.fn(async () => []),
+}));
 import * as db from "@/db";
 import { POST } from "@/app/api/responses/[id]/complete/route";
 
@@ -30,7 +34,10 @@ function complete(id = ID) {
   );
 }
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.mocked(db.askedFollowUps).mockResolvedValue([]);
+});
 
 describe("POST /api/responses/:id/complete", () => {
   it("completes a fully answered response and returns the reference code", async () => {
@@ -39,6 +46,23 @@ describe("POST /api/responses/:id/complete", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ referenceCode: "3f1c2b7a" });
     expect(db.completeResponse).toHaveBeenCalledWith(ID);
+  });
+
+  it("refuses while a follow-up is still waiting for an answer", async () => {
+    stored(SHORT_PATH);
+    vi.mocked(db.askedFollowUps).mockResolvedValue([
+      { question_id: "pains", followup_index: 1, followup_text: "Which step took longest?" },
+    ]);
+    expect((await complete()).status).toBe(409);
+    expect(db.completeResponse).not.toHaveBeenCalled();
+  });
+
+  it("completes once the follow-up has been answered", async () => {
+    stored([...SHORT_PATH, { question_id: "pains", followup_index: 1, question_text: "Which step took longest?", value: { text: "The search." } }]);
+    vi.mocked(db.askedFollowUps).mockResolvedValue([
+      { question_id: "pains", followup_index: 1, followup_text: "Which step took longest?" },
+    ]);
+    expect((await complete()).status).toBe(200);
   });
 
   it("refuses while a question is unanswered", async () => {

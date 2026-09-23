@@ -85,7 +85,9 @@ Rules:
 - Answers are capped at 4,000 characters.
 
 **Probe criteria** (what the model checks for; the participant never sees
-these):
+these). Each probed question has its own prompt, `prompts/probe-<id>.md`,
+which states the element, when it counts as present, and illustrative
+decisions; the prompt files are the source and the thesis prints them.
 
 | Question | Missing element | Context given to the model |
 |---|---|---|
@@ -163,7 +165,7 @@ welcome screen and, quieter, on the question screens — someone who began in
 the wrong language would otherwise have to abandon the form (decided
 2026-09-23, issue #9). Follow-up questions appear on the same screen below the answer,
 with the answer shown read-only above; while the model is called, a small
-"one moment" indicator shows for at most 8 seconds.
+"one moment" indicator shows for at most 12 seconds.
 
 Mobile first. Visible focus ring, labelled inputs, `prefers-reduced-motion`
 honoured. `<meta name="robots" content="noindex">`.
@@ -280,7 +282,7 @@ Submitting an unchanged answer again (walking forward after Back) writes
 nothing and never calls the probe. The export reads only answers to active
 questions, as a second guard.
 
-## 9. The AI probe (`src/probe.ts`, `prompts/probe.md`)
+## 9. The AI probe (`src/probe.ts`, `prompts/probe-<id>.md`)
 
 **When.** After an answer to a question with `probe`, if
 `response.probe_allowed` and `PROBE_ENABLED` and follow-ups so far `<
@@ -302,18 +304,44 @@ z.object({
 })
 ```
 
-Model from `AI_GATEWAY_MODEL`; fallback model list through the gateway
-provider options; `maxRetries: 1`; one `AbortSignal` with an 8-second total
-deadline across primary and fallback. No `temperature` (Sonnet 5 does not
-expose it).
+Built with AI SDK 7, whose names differ from earlier versions: the schema is
+passed as `output: Output.object({ schema })`, the prompt file goes in
+`instructions` (was `system`), and the deadline is `timeout: { totalMs }`.
+The model is named in the code, not in an environment variable
+(`PRIMARY_MODEL` in `src/probe.ts`); the fallback comes from
+`providerOptions.gateway.models`, and `disallowPromptTraining: true` is set on
+every call, which makes the consent sentence "not used to train models" true by
+construction — the gateway refuses to route to a provider that may train.
+`maxRetries: 1`; one deadline of 12 seconds covers primary and fallback
+(8 s until 2026-09-23). No `temperature` (Sonnet 5 does not expose it);
+`reasoning: "low"`, chosen by measurement.
 
-**Rules in the prompt** (the prompt file is the source; this is the
-summary): you are helping a researcher understand how this person works; ask
-only for the missing element named; one question, at most 25 words, in the
-participant's language, polite `Sie` in German; never suggest a tool,
-product, service or solution; never ask about time or cost (asked
-elsewhere); never introduce a topic the participant did not raise; if the
-element is present, `missing = false` and `followUp = null`.
+**Measured on 2026-09-23** against the thirty eval fixtures, sixty calls with
+the eval's own deadline raised to 30 s so that nothing was cut off:
+
+| | `provider-default` | `low` |
+|---|---|---|
+| completed calls deciding as the criterion demands | 50 / 50 | 60 / 60 |
+| follow-ups the post-check had to reject | 0 | 0 |
+| median latency | 3 189 ms | 2 338 ms |
+| mean follow-up length | 101 characters | 97 characters |
+
+The latency is bimodal: fifty-two calls between 1.5 s and 4.7 s, eight between
+8.4 s and 12.6 s, nothing in between. The 12-second deadline therefore slows no
+call down; it only changes the outcome for the second group, who at 8 s waited
+the longest and got nothing. The two regimes are open as issue #12.
+
+**Rules in the prompts** (the three prompt files are the source; this is the
+summary, rewritten 2026-09-22 for Claude Sonnet 5, which follows
+instructions literally): each file gives the study's context and what that
+question's answer must contain, with when it counts as present and a few
+illustrative decisions. One question, in the participant's language, polite
+`Sie` and Swiss spelling in German, built on the person's own words, short
+enough to read on a phone (the exact length limit is the post-check, not the
+prompt). Two constraints carry their reason: no tool, product or service may
+be named (the thesis studies which ones people reach for unprompted), and
+time and cost are not asked (another question covers them). If the element
+is present, `missing = false` and `followUp = null`.
 
 **Post-check (deterministic, after the call).** The follow-up is shown only
 if: `missing` is true, `followUp` is non-empty, ≤ 200 characters, contains
@@ -411,7 +439,7 @@ Vercel Authentication; production is public but `noindex`. Locally:
 |---|---|---|---|
 | M1 | **Skeleton and form engine** | Next.js project, `form.ts` with all texts, pure engine with tests, the eight screens with the theme, in-memory answers, localStorage resume | `npm run dev` — fill the form in both languages |
 | M2 | **Storage** | Supabase schema and migrations, route handlers, upsert, consent gate, resume from server, reference code, export script, daily cron with Blob export | fill the form → rows in Supabase; `npm run export` |
-| M3 | **The probe** | `prompts/probe.md`, `probe.ts` with schema, post-check, timeout, fallback, `probe_calls`, UID gate, kill switch, prompt evals | a thin answer gets a follow-up, a detailed one does not; evals green |
+| M3 | **The probe** | `prompts/probe-<id>.md`, `probe.ts` with schema, post-check, timeout, fallback, `probe_calls`, UID gate, kill switch, prompt evals | a thin answer gets a follow-up, a detailed one does not; evals green |
 | M4 | **Deploy and harden** | Vercel project in `fra1`, env, budget and alerts, WAF rule, Playwright smoke test, final consent text, runbook | production URL works end to end on a phone |
 | M5 | **Pilot** | 2–3 pilot runs, metrics, hand review of every generated question, decision on `maxFollowUps`, pilot report | report attached to the thesis issue |
 
@@ -423,12 +451,13 @@ Vercel Authentication; production is public but `noindex`. Locally:
 - Retention of raw answers after submission — ethics approval.
 - Native-speaker check of the German texts before the pilot.
 - HMAC-signed `c` tag (optional, only if misattribution ever matters).
-- Editing a probed answer after its follow-ups (M3 plan decides). The
-  participant goes back and changes the fixed answer to `case`, `pains` or
-  `gains`; the follow-ups were asked about the old text. Proposed default:
-  the limit counts model calls, not follow-ups shown, so the invariant in §4
-  holds; the earlier follow-up answers stay (each is stored with the question
-  text it answered); the edited answer is probed again only if calls remain.
+**Settled since.** Editing a probed answer after its follow-ups (2026-09-22,
+M3 plan): the limit counts model calls, not follow-ups shown, so the invariant
+in §4 holds; earlier follow-up answers stay, each stored with the question text
+it answered; an edited answer is judged again only if a call remains. The
+language may be changed while answering (2026-09-23, issue #9): it travels with
+each answer, so `responses.lang` means "the language last used" and each answer
+keeps the wording the person saw.
 
 ## 16. Audit trace
 
@@ -441,10 +470,78 @@ Vercel Authentication; production is public but `noindex`. Locally:
 | Consent promises (P1) | §3 consent text; §10 |
 | Budget drain (P2) | §10 UID gate, WAF rule, alerts |
 | No post-check on generated text (P2) | §9 post-check |
-| Retry × timeout (P2) | §9 `maxRetries: 1`, 8-second deadline |
+| Retry × timeout (P2) | §9 `maxRetries: 1`, 12-second deadline |
 | Context for `pains`/`gains` (P2) | §3 probe criteria table |
 | Withdrawal path (P2) | §3 thank-you screen; §11 runbook |
 | Runbook (P2) | §11 |
 | Error class in `probe_calls` (P2) | §7 |
 | Hand-review checklist (P2) | §12 pilot |
 | `generateObject` vs `Output.object` | §9 |
+
+## 17. Changing the form
+
+Written 2026-09-23, from a sweep of everything that depends on the form's
+shape. The form is meant to be changed while it is being designed; this
+section says what moves with it and what fails quietly if it does not.
+
+**The database needs nothing.** `answers.question_id` is plain `text` with no
+check constraint, the value is `jsonb`, and there is no table or column per
+question. Adding, removing, reordering or rewording questions requires no
+migration. Two limits in the schema do: `answers.followup_index between 0 and
+2` (a third follow-up per question) and `responses.lang in ('de','en')` (a
+third language — French is the realistic one here, and it also touches the Zod
+schema and `i18n.ts`).
+
+**Bump `FORM_VERSION` with every change.** It is the only thing that lets the
+analysis separate answers given to different versions of the instrument;
+`responses.form_version` stores it per response. Bumping it also discards
+saved browser state and makes a resumed response start over
+(`storage.loadSaved`, and the version check in `Form.tsx`), which is why the
+form must not change once invitations are out. The old rows stay in the
+database, complete with the wording they were answered under.
+
+**Question ids are permanent; wording is not.** Each answer keeps the exact
+`question_text` the participant saw, so rewriting a question leaves old
+answers readable and attributable. Renaming an id does something worse than
+break: old rows keep the old id, new rows carry the new one, nothing errors,
+no test fails, and the analysis sees two questions where there was one. Change
+the words, keep the id.
+
+**What fails loudly, and should.** `tests/form.test.ts` pins the id list, the
+three probed questions with two follow-ups each, the 4,000-character cap and
+the skip rule; `tests/prompt.test.ts` checks that each probe prompt quotes its
+question exactly as `form.ts` asks it; the component and route tests walk the
+eight screens by name. Changing the form turns these red. That is the safety
+net working — update them deliberately, and read what each one was protecting.
+
+**What fails silently.** These hold facts about the form in prose, and nothing
+checks them against `form.ts`:
+
+- The intro text (`texts.ts`, `UI.intro`) promises "8 short questions, about 6
+  minutes". Change the count and the consent text is false.
+- The privacy text (`UI.privacy`) promises "three of your written answers may
+  receive one or two short follow-up questions". Change how many questions are
+  probed, or `maxFollowUps`, and the same applies. Both sentences are part of
+  what the participant consented to, so this is an ethics question before it
+  is a copy question.
+- `UI.tooLong` names 4,000 characters in its own string while the cap lives in
+  `form.ts`. `form.test.ts` catches the cap changing; nothing catches the
+  message that then lies about it.
+- `Form.tsx` decides whether to say "I will be in touch" by looking for the
+  option id `conversation` on the question id `followup` (`wantsConversation`).
+  Renaming either leaves the thank-you screen quietly wrong.
+- Section 3 of this document tabulates the questions and the probe criteria,
+  and the thesis prints the instrument. Both go stale without a word.
+
+**A probed question brings a file with it.** Each one needs
+`prompts/probe-<id>.md` stating its element and when it counts as present, and
+fixtures in `evals/fixtures.ts` — thin answers that must earn a follow-up,
+complete ones that must not. A probed question with no prompt file throws at
+the first call (`loadPrompt`); one with no fixtures is simply never measured,
+which is worse, because nothing says so.
+
+**The order to work in.** Edit `form.ts`; bump `FORM_VERSION`; update the
+prompt files and eval fixtures for any probed question that changed; run
+`npm test` and fix what went red, reading each failure rather than repairing
+it; re-read `UI.intro`, `UI.privacy` and `UI.tooLong` against the new form;
+update section 3 here; run the evals if a probe criterion moved.
