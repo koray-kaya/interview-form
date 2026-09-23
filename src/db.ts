@@ -76,6 +76,14 @@ export async function createResponse(input: {
 }
 
 /** The response and its answers, or null when the id is unknown. */
+/**
+ * The language of a response is the one last used: a participant may switch
+ * while answering, and each answer keeps the wording that was on screen.
+ */
+export async function setLang(id: string, lang: Lang): Promise<void> {
+  check(await db().from("responses").update({ lang }).eq("id", id), "setLang");
+}
+
 export async function getResponse(id: string): Promise<{ response: ResponseRow; answers: AnswerRow[] } | null> {
   const response = check(
     await db().from("responses").select("*").eq("id", id).maybeSingle(),

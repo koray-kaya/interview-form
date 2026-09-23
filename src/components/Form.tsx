@@ -16,6 +16,7 @@ import { t, type Lang } from "@/i18n";
 import { referenceCode as codeFor } from "@/responses";
 import { clearSaved, loadSaved, saveSaved, type Stage } from "@/storage";
 import { UI } from "@/texts";
+import { LanguageToggle } from "@/components/LanguageToggle";
 import { ProgressBar } from "@/components/ProgressBar";
 import { QuestionScreen } from "@/components/QuestionScreen";
 import { ThankYou } from "@/components/ThankYou";
@@ -155,7 +156,7 @@ function FormInBrowser({ initialLang, companyTag }: Props) {
   async function submit(value: AnswerValue): Promise<string | null> {
     if (!current || !responseId) return null;
     try {
-      await postAnswer(responseId, current.id, value);
+      await postAnswer(responseId, current.id, value, lang);
     } catch (error) {
       if (error instanceof ApiError && error.status === 400) return error.message;
       return t(UI.saveFailed, lang);
@@ -196,6 +197,7 @@ function FormInBrowser({ initialLang, companyTag }: Props) {
   return (
     <main>
       <ProgressBar done={done} total={total} />
+      <LanguageToggle lang={lang} onLang={setLang} quiet />
       <QuestionScreen
         key={current.id}
         question={current}

@@ -54,8 +54,13 @@ export async function fetchResponse(id: string): Promise<Resumed | null> {
   }
 }
 
-export function postAnswer(id: string, questionId: string, value: AnswerValue): Promise<{ followUp: null }> {
-  return call(`/api/responses/${id}/answers`, { questionId, followupIndex: 0, value });
+export function postAnswer(
+  id: string,
+  questionId: string,
+  value: AnswerValue,
+  lang: Lang,
+): Promise<{ followUp: null }> {
+  return call(`/api/responses/${id}/answers`, { questionId, followupIndex: 0, value, lang });
 }
 
 export function completeResponse(id: string): Promise<{ referenceCode: string }> {

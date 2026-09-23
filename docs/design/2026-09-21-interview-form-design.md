@@ -160,8 +160,10 @@ in muted grey, the input, an **OK** button, `Enter` submits (`Shift+Enter` for
 a new line in text areas; on a touch screen, which has no Shift key, `Enter`
 is a new line and OK submits), key hints `A B C` on choices (ignored while
 Cmd, Ctrl or Alt is held), a thin progress bar
-at the top, up/down arrows bottom right, language toggle on the welcome
-screen only. Follow-up questions appear on the same screen below the answer,
+at the top, up/down arrows bottom right, language toggle top right on the
+welcome screen and, quieter, on the question screens — someone who began in
+the wrong language would otherwise have to abandon the form (decided
+2026-09-23, issue #9). Follow-up questions appear on the same screen below the answer,
 with the answer shown read-only above; while the model is called, a small
 "one moment" indicator shows for at most 8 seconds.
 
@@ -257,7 +259,7 @@ bearer for that response.
 |---|---|---|---|
 | `POST /api/responses` | `{ c?: string, lang, consent: true }` | `{ id, probeAllowed }` | `probe_allowed` = UID well-formed with valid check digit |
 | `GET /api/responses/:id` | — | `{ lang, formVersion, answered: [{questionId, followupIndex, questionText, value}], completed }` | for resume |
-| `POST /api/responses/:id/answers` | `{ questionId, followupIndex, value }` | `{ followUp: { index, text } \| null }` | upsert on the unique key; refuses if not consented or completed; validates against the form; calls the probe when allowed |
+| `POST /api/responses/:id/answers` | `{ questionId, followupIndex, value, lang? }` | `{ followUp: { index, text } \| null }` | upsert on the unique key; refuses if not consented or completed; validates against the form; calls the probe when allowed. `lang` is the language on screen when the answer was given: the stored question text is taken from the form in that language, and a change is written to `responses.lang`, which therefore means "last used" |
 | `POST /api/responses/:id/complete` | — | `{ referenceCode }` | sets `completed_at`; first 8 hex characters of the id |
 | `GET /api/cron/daily` | header `Authorization: Bearer $CRON_SECRET` | `{ exported: n }` | keep-alive read + export; Vercel cron, once a day |
 

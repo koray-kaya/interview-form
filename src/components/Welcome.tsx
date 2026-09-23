@@ -4,6 +4,7 @@
 import { useState } from "react";
 import { t, type Lang } from "@/i18n";
 import { UI } from "@/texts";
+import { LanguageToggle } from "@/components/LanguageToggle";
 
 type Props = {
   lang: Lang;
@@ -26,22 +27,7 @@ export function Welcome({ lang, onLang, onStart }: Props) {
   }
   return (
     <section className="mx-auto flex min-h-dvh w-full max-w-2xl animate-enter-up flex-col justify-center gap-6 px-6 py-20">
-      <div className="fixed right-5 top-5 flex rounded-md border border-border bg-white p-0.5 text-sm shadow-sm">
-        {(["de", "en"] as Lang[]).map((option) => (
-          <button
-            key={option}
-            type="button"
-            onClick={() => onLang(option)}
-            aria-pressed={lang === option}
-            className={
-              "rounded px-2.5 py-1 transition-colors " +
-              (lang === option ? "bg-accent font-medium text-white" : "text-body hover:text-accent")
-            }
-          >
-            {t(option === "de" ? UI.langDe : UI.langEn, lang)}
-          </button>
-        ))}
-      </div>
+      <LanguageToggle lang={lang} onLang={onLang} />
 
       <h1 className="text-3xl font-semibold leading-tight tracking-tight text-foreground sm:text-4xl">{t(UI.title, lang)}</h1>
       <p className="text-lg leading-relaxed text-body">{t(UI.intro, lang)}</p>
