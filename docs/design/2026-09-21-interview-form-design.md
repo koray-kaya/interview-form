@@ -477,3 +477,71 @@ keeps the wording the person saw.
 | Error class in `probe_calls` (P2) | §7 |
 | Hand-review checklist (P2) | §12 pilot |
 | `generateObject` vs `Output.object` | §9 |
+
+## 17. Changing the form
+
+Written 2026-09-23, from a sweep of everything that depends on the form's
+shape. The form is meant to be changed while it is being designed; this
+section says what moves with it and what fails quietly if it does not.
+
+**The database needs nothing.** `answers.question_id` is plain `text` with no
+check constraint, the value is `jsonb`, and there is no table or column per
+question. Adding, removing, reordering or rewording questions requires no
+migration. Two limits in the schema do: `answers.followup_index between 0 and
+2` (a third follow-up per question) and `responses.lang in ('de','en')` (a
+third language — French is the realistic one here, and it also touches the Zod
+schema and `i18n.ts`).
+
+**Bump `FORM_VERSION` with every change.** It is the only thing that lets the
+analysis separate answers given to different versions of the instrument;
+`responses.form_version` stores it per response. Bumping it also discards
+saved browser state and makes a resumed response start over
+(`storage.loadSaved`, and the version check in `Form.tsx`), which is why the
+form must not change once invitations are out. The old rows stay in the
+database, complete with the wording they were answered under.
+
+**Question ids are permanent; wording is not.** Each answer keeps the exact
+`question_text` the participant saw, so rewriting a question leaves old
+answers readable and attributable. Renaming an id does something worse than
+break: old rows keep the old id, new rows carry the new one, nothing errors,
+no test fails, and the analysis sees two questions where there was one. Change
+the words, keep the id.
+
+**What fails loudly, and should.** `tests/form.test.ts` pins the id list, the
+three probed questions with two follow-ups each, the 4,000-character cap and
+the skip rule; `tests/prompt.test.ts` checks that each probe prompt quotes its
+question exactly as `form.ts` asks it; the component and route tests walk the
+eight screens by name. Changing the form turns these red. That is the safety
+net working — update them deliberately, and read what each one was protecting.
+
+**What fails silently.** These hold facts about the form in prose, and nothing
+checks them against `form.ts`:
+
+- The intro text (`texts.ts`, `UI.intro`) promises "8 short questions, about 6
+  minutes". Change the count and the consent text is false.
+- The privacy text (`UI.privacy`) promises "three of your written answers may
+  receive one or two short follow-up questions". Change how many questions are
+  probed, or `maxFollowUps`, and the same applies. Both sentences are part of
+  what the participant consented to, so this is an ethics question before it
+  is a copy question.
+- `UI.tooLong` names 4,000 characters in its own string while the cap lives in
+  `form.ts`. `form.test.ts` catches the cap changing; nothing catches the
+  message that then lies about it.
+- `Form.tsx` decides whether to say "I will be in touch" by looking for the
+  option id `conversation` on the question id `followup` (`wantsConversation`).
+  Renaming either leaves the thank-you screen quietly wrong.
+- Section 3 of this document tabulates the questions and the probe criteria,
+  and the thesis prints the instrument. Both go stale without a word.
+
+**A probed question brings a file with it.** Each one needs
+`prompts/probe-<id>.md` stating its element and when it counts as present, and
+fixtures in `evals/fixtures.ts` — thin answers that must earn a follow-up,
+complete ones that must not. A probed question with no prompt file throws at
+the first call (`loadPrompt`); one with no fixtures is simply never measured,
+which is worse, because nothing says so.
+
+**The order to work in.** Edit `form.ts`; bump `FORM_VERSION`; update the
+prompt files and eval fixtures for any probed question that changed; run
+`npm test` and fix what went red, reading each failure rather than repairing
+it; re-read `UI.intro`, `UI.privacy` and `UI.tooLong` against the new form;
+update section 3 here; run the evals if a probe criterion moved.
