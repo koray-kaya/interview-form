@@ -56,13 +56,16 @@ export async function fetchResponse(id: string): Promise<Resumed | null> {
   }
 }
 
+export type AskedFollowUp = { index: number; text: string };
+
 export function postAnswer(
   id: string,
   questionId: string,
   value: AnswerValue,
   lang: Lang,
-): Promise<{ followUp: null }> {
-  return call(`/api/responses/${id}/answers`, { questionId, followupIndex: 0, value, lang });
+  followupIndex = 0,
+): Promise<{ followUp: AskedFollowUp | null }> {
+  return call(`/api/responses/${id}/answers`, { questionId, followupIndex, value, lang });
 }
 
 export function completeResponse(id: string): Promise<{ referenceCode: string }> {

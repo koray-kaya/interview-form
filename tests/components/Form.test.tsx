@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 vi.mock("@/api", async () => (await import("../support/fakeApi")).fakeApi);
@@ -24,6 +24,18 @@ async function choose(name: RegExp) {
 }
 
 const only = () => [...server.responses.values()][0];
+
+/** The path to `case`, the first question the model may follow up on. */
+async function reachCase() {
+  await start("en");
+  await choose(/Owner/);
+  await screen.findByText(/How many people/);
+  await choose(/10–49/);
+  await screen.findByText(/did you look into another company/);
+  await userEvent.click(screen.getByRole("checkbox", { name: /a new customer/ }));
+  await userEvent.click(screen.getByRole("button", { name: "OK" }));
+  await screen.findByText(/Think of the most recent case/);
+}
 
 describe("Form", () => {
   it("requires consent before starting", async () => {
@@ -59,6 +71,42 @@ describe("Form", () => {
     render(<Form initialLang="de" />);
     expect(await screen.findByText(/Vielen Dank/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "English" })).not.toBeInTheDocument();
+  });
+
+  it("asks the follow-up on the same screen, with the answer above it", async () => {
+    server.followUps.push({ index: 1, text: "Where did you look?" });
+    await reachCase();
+    await userEvent.type(screen.getByRole("textbox"), "We looked into a supplier.{Enter}");
+    expect(await screen.findByText("Where did you look?")).toBeInTheDocument();
+    // the question and the answer stay on screen, the answer no longer editable
+    expect(screen.getByText(/Think of the most recent case/)).toBeInTheDocument();
+    expect(screen.getByText("We looked into a supplier.")).toBeInTheDocument();
+    expect(screen.getByRole("textbox")).toHaveValue("");
+  });
+
+  it("sends the follow-up answer with its index, then moves on", async () => {
+    const { fakeApi } = await import("../support/fakeApi");
+    server.followUps.push({ index: 1, text: "Where did you look?" });
+    await reachCase();
+    await userEvent.type(screen.getByRole("textbox"), "We looked into a supplier.{Enter}");
+    await screen.findByText("Where did you look?");
+    await userEvent.type(screen.getByRole("textbox"), "The commercial register.{Enter}");
+    await screen.findByText(/how long did that take/i);
+    expect(fakeApi.postAnswer).toHaveBeenLastCalledWith(
+      expect.any(String), "case", { text: "The commercial register." }, "en", 1,
+    );
+  });
+
+  it("shows a follow-up again that was left unanswered before the reload", async () => {
+    server.followUps.push({ index: 1, text: "Where did you look?" });
+    await reachCase();
+    await userEvent.type(screen.getByRole("textbox"), "We looked into a supplier.{Enter}");
+    await screen.findByText("Where did you look?");
+    cleanup(); // the participant leaves without answering the follow-up
+
+    render(<Form initialLang="en" />);
+    expect(await screen.findByText("Where did you look?")).toBeInTheDocument();
+    expect(screen.getByText("We looked into a supplier.")).toBeInTheDocument();
   });
 
   it("starts a response on the server with the company tag and the language", async () => {

@@ -6,7 +6,7 @@
 // resumes from the server; localStorage only remembers the response id.
 // Keyboard: ArrowUp goes back.
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { ApiError, completeResponse, fetchResponse, postAnswer, startResponse } from "@/api";
+import { ApiError, completeResponse, fetchResponse, postAnswer, startResponse, type AskedFollowUp } from "@/api";
 import { FORM, FORM_VERSION } from "@/form";
 import {
   AnswerValueSchema, activeQuestions, applyAnswer, nextQuestion, previousQuestion, progress, pruneSkipped,
@@ -39,6 +39,8 @@ export function Form(props: Props) {
   return useInBrowser() ? <FormInBrowser {...props} /> : <main />;
 }
 
+const written = (value: AnswerValue): string => ("text" in value ? value.text : "");
+
 function wantsConversation(answers: Answers): boolean {
   const value = answers.followup;
   return value !== undefined && "options" in value && value.options.includes("conversation");
@@ -65,6 +67,9 @@ function FormInBrowser({ initialLang, companyTag }: Props) {
   const [inTouch, setInTouch] = useState<boolean>(saved?.inTouch ?? false);
   // which way the last move went, so the next screen slides in from there
   const [direction, setDirection] = useState<"forward" | "back">("forward");
+  // the model's open follow-up, and what the participant already wrote here
+  const [followUp, setFollowUp] = useState<AskedFollowUp | null>(null);
+  const [given, setGiven] = useState<{ question?: string; answer: string }[]>([]);
 
   // Resume from the server once. A response it no longer knows (deleted
   // after seven days, or from an older form) starts over.
@@ -89,6 +94,22 @@ function FormInBrowser({ initialLang, companyTag }: Props) {
         const clean = pruneSkipped(FORM, restored);
         setLang(resumed.lang);
         setAnswers(clean);
+        const waiting = resumed.pending[0];
+        if (!resumed.completed && waiting) {
+          // the participant left with a follow-up on screen: show it again,
+          // with everything they already wrote on this question above it
+          setCurrentId(waiting.questionId);
+          setFollowUp({ index: waiting.index, text: waiting.text });
+          setGiven([
+            { answer: written(clean[waiting.questionId] ?? { text: "" }) },
+            ...resumed.answered
+              .filter((row) => row.questionId === waiting.questionId && row.followupIndex > 0)
+              .sort((a, b) => a.followupIndex - b.followupIndex)
+              .map((row) => ({ question: row.questionText, answer: written(row.value) })),
+          ]);
+          setStage("questions");
+          return;
+        }
         if (resumed.completed) {
           setReferenceCode(codeFor(id));
           setInTouch(wantsConversation(clean));
@@ -151,12 +172,14 @@ function FormInBrowser({ initialLang, companyTag }: Props) {
     }
   }
 
-  // Stores the answer, then moves on. Returns an error message for the
-  // question screen, or null when the form moved on.
+  // Stores the answer. The server may answer with a follow-up, and then the
+  // form stays on this question. Returns an error message for the question
+  // screen, or null.
   async function submit(value: AnswerValue): Promise<string | null> {
     if (!current || !responseId) return null;
+    let asked: AskedFollowUp | null = null;
     try {
-      await postAnswer(responseId, current.id, value, lang);
+      asked = (await postAnswer(responseId, current.id, value, lang)).followUp;
     } catch (error) {
       if (error instanceof ApiError && error.status === 400) return error.message;
       return t(UI.saveFailed, lang);
@@ -166,6 +189,33 @@ function FormInBrowser({ initialLang, companyTag }: Props) {
     // the server just did
     const updated = applyAnswer(FORM, answers, current.id, value);
     setAnswers(updated);
+    if (asked) {
+      setGiven([{ answer: written(value) }]);
+      setFollowUp(asked);
+      return null;
+    }
+    return await moveOn(updated);
+  }
+
+  /** The answer to the model's follow-up. It may earn one more, then the form moves on. */
+  async function submitFollowUp(value: AnswerValue): Promise<string | null> {
+    if (!current || !responseId || !followUp) return null;
+    let asked: AskedFollowUp | null = null;
+    try {
+      asked = (await postAnswer(responseId, current.id, value, lang, followUp.index)).followUp;
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 400) return error.message;
+      return t(UI.saveFailed, lang);
+    }
+    setGiven([...given, { question: followUp.text, answer: written(value) }]);
+    setFollowUp(asked);
+    return asked ? null : await moveOn(answers);
+  }
+
+  async function moveOn(updated: Answers): Promise<string | null> {
+    if (!current || !responseId) return null;
+    setFollowUp(null);
+    setGiven([]);
     setDirection("forward");
     // walk forward screen by screen (also after Back); at the end, pick up
     // anything a changed answer un-skipped
@@ -199,14 +249,18 @@ function FormInBrowser({ initialLang, companyTag }: Props) {
       <ProgressBar done={done} total={total} />
       <LanguageToggle lang={lang} onLang={setLang} quiet />
       <QuestionScreen
-        key={current.id}
+        // a new follow-up is a new screen: the key resets the draft in the box
+        key={`${current.id}:${followUp?.index ?? 0}`}
         question={current}
         lang={lang}
         number={questionNumber(FORM, answers, current.id)}
         initial={answers[current.id]}
         onSubmit={submit}
-        onBack={previousQuestion(FORM, answers, current.id) ? goBack : undefined}
+        onBack={followUp ? undefined : previousQuestion(FORM, answers, current.id) ? goBack : undefined}
         direction={direction}
+        asking={followUp?.text}
+        given={given}
+        onFollowUp={submitFollowUp}
       />
     </main>
   );
