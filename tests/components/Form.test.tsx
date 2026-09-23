@@ -41,6 +41,26 @@ describe("Form", () => {
     expect(document.documentElement.lang).toBe("en");
   });
 
+  it("switches language while answering, and the answer carries the new one", async () => {
+    const { fakeApi } = await import("../support/fakeApi");
+    await start("de");
+    await userEvent.click(screen.getByRole("button", { name: "English" }));
+    expect(await screen.findByText(/Your role/)).toBeInTheDocument();
+    await choose(/Owner/);
+    expect(fakeApi.postAnswer).toHaveBeenLastCalledWith(expect.any(String), "role", { option: "owner" }, "en");
+  });
+
+  it("does not offer the language toggle on the thank-you screen", async () => {
+    const { FORM_VERSION } = await import("@/form");
+    localStorage.setItem(
+      "interview-form",
+      JSON.stringify({ version: FORM_VERSION, lang: "de", stage: "done", responseId: null, referenceCode: "0123abcd" }),
+    );
+    render(<Form initialLang="de" />);
+    expect(await screen.findByText(/Vielen Dank/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "English" })).not.toBeInTheDocument();
+  });
+
   it("starts a response on the server with the company tag and the language", async () => {
     const { fakeApi } = await import("../support/fakeApi");
     await start("en", "CHE123456789");

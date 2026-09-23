@@ -44,12 +44,13 @@ export const fakeApi = {
       })),
     };
   }),
-  postAnswer: vi.fn(async (id: string, questionId: string, value: AnswerValue) => {
+  postAnswer: vi.fn(async (id: string, questionId: string, value: AnswerValue, lang: Lang) => {
     if (server.failNextAnswer) {
       server.failNextAnswer = false;
       throw new TypeError("network down");
     }
     const stored = server.responses.get(id)!;
+    stored.lang = lang;
     stored.answers = applyAnswer(FORM, stored.answers, questionId, value);
     return { followUp: null };
   }),

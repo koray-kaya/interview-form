@@ -4,7 +4,7 @@
 // The question text stored with the answer comes from the form, never from
 // the request. Follow-ups (followupIndex 1–2) arrive in M3.
 import { z } from "zod";
-import { getResponse, saveAnswer } from "@/db";
+import { getResponse, saveAnswer, setLang } from "@/db";
 import { AnswerValueSchema, applyAnswer, isSkipped, sameAnswer, validate } from "@/engine";
 import { FORM } from "@/form";
 import { t } from "@/i18n";
@@ -15,6 +15,8 @@ const Body = z.object({
   questionId: z.string().max(64),
   followupIndex: z.literal(0),
   value: AnswerValueSchema,
+  /** The language on screen when the answer was given; absent means unchanged. */
+  lang: z.enum(["de", "en"]).optional(),
 });
 
 type Context = { params: Promise<{ id: string }> };
@@ -33,7 +35,11 @@ export async function POST(request: Request, { params }: Context): Promise<Respo
   if (!found) return json(404, { error: "not found" });
   if (found.response.completed_at !== null) return json(409, { error: "response already completed" });
 
-  const lang = found.response.lang;
+  // The participant may have switched language since the response was created.
+  // The request decides what they saw; the text itself still comes from the form.
+  const lang = parsed.data.lang ?? found.response.lang;
+  if (lang !== found.response.lang) await setLang(id, lang);
+
   const before = fixedAnswers(found.answers);
   if (isSkipped(FORM, questionId, before)) return json(400, { error: "question not active" });
 
