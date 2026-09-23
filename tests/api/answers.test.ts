@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AnswerRow, ResponseRow } from "@/db";
 import { FORM_VERSION } from "@/form";
 
-vi.mock("@/db", () => ({ getResponse: vi.fn(), saveAnswer: vi.fn(async () => true) }));
+vi.mock("@/db", () => ({ getResponse: vi.fn(), saveAnswer: vi.fn(async () => true), setLang: vi.fn(async () => {}) }));
 import * as db from "@/db";
 import { POST } from "@/app/api/responses/[id]/answers/route";
 
@@ -46,6 +46,31 @@ describe("POST /api/responses/:id/answers", () => {
       responseId: ID, questionId: "role", followupIndex: 0, questionText: "Ihre Rolle",
       value: { option: "sales" }, pruned: [],
     });
+  });
+
+  it("stores the question text in the language the participant switched to", async () => {
+    stored([], { lang: "de" });
+    await answer({ questionId: "role", followupIndex: 0, value: { option: "sales" }, lang: "en" });
+    expect(vi.mocked(db.saveAnswer).mock.calls[0][0].questionText).toBe("Your role");
+  });
+
+  it("records the switched language on the response", async () => {
+    stored([], { lang: "de" });
+    await answer({ questionId: "role", followupIndex: 0, value: { option: "sales" }, lang: "en" });
+    expect(db.setLang).toHaveBeenCalledWith(ID, "en");
+  });
+
+  it("leaves the response alone when the language did not change", async () => {
+    stored([], { lang: "de" });
+    await answer({ questionId: "role", followupIndex: 0, value: { option: "sales" }, lang: "de" });
+    expect(db.setLang).not.toHaveBeenCalled();
+  });
+
+  it("keeps the response's own language when the request names none", async () => {
+    stored([], { lang: "de" });
+    await answer({ questionId: "role", followupIndex: 0, value: { option: "sales" } });
+    expect(vi.mocked(db.saveAnswer).mock.calls[0][0].questionText).toBe("Ihre Rolle");
+    expect(db.setLang).not.toHaveBeenCalled();
   });
 
   it("writes nothing when the same answer arrives again (retry, or OK after Back)", async () => {
