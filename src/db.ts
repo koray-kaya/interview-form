@@ -6,6 +6,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { AnswerValue } from "@/engine";
 import type { Lang } from "@/i18n";
 import { serverEnv } from "@/env";
+import { SMOKE_TAG } from "@/responses";
 
 export type ResponseRow = {
   id: string;
@@ -161,6 +162,15 @@ export async function deleteUnfinishedBefore(before: Date): Promise<number> {
   return rows.length;
 }
 
+/** Deletes the production smoke test's responses (company tag SMOKE_TAG). */
+export async function deleteSmokeResponses(): Promise<number> {
+  const rows = must(
+    await db().from("responses").delete().eq("company_uid", SMOKE_TAG).select("id"),
+    "deleteSmokeResponses",
+  );
+  return rows.length;
+}
+
 /** One cheap read, so the project counts as active (Supabase Free pauses idle projects). */
 export async function touch(): Promise<void> {
   check(await db().from("responses").select("id").limit(1), "touch");
@@ -195,6 +205,8 @@ export type ProbeCallRow = {
   input_tokens: number | null;
   output_tokens: number | null;
   latency_ms: number | null;
+  /** Where inference ran ("eu"), as the gateway reported it; null when it did not say. */
+  inference_region: string | null;
 };
 
 /** Model calls already made for one question of one response (the limit counts these). */

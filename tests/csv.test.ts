@@ -117,6 +117,13 @@ describe("toCsv", () => {
     expect(done.minutes).toBe("12.5");
   });
 
+  it("leaves out the smoke test's responses, and only the exact tag", () => {
+    const smoke = "5a5a5a5a-1111-4222-8333-444455556666";
+    const lower = "6b6b6b6b-1111-4222-8333-444455556666";
+    const rows = parse(toCsv(FORM, [response(smoke, { company_uid: "SMOKE" }), response(lower, { company_uid: "smoke" })], []));
+    expect(rows.map((row) => row.reference)).toEqual(["6b6b6b6b"]);
+  });
+
   it("never carries the e-mail address", () => {
     expect(csv).not.toContain("person@example.ch");
     expect(Object.keys(done).some((name) => name.includes("email"))).toBe(false);

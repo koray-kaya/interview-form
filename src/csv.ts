@@ -7,7 +7,7 @@
 // not for analysis. Plain TypeScript, no library.
 import { AnswerValueSchema, type AnswerValue } from "@/engine";
 import type { Form } from "@/form";
-import { referenceCode } from "@/responses";
+import { referenceCode, SMOKE_TAG } from "@/responses";
 
 export type CsvResponse = {
   id: string;
@@ -93,14 +93,14 @@ function minutes(from: string, to: string): string {
 
 /**
  * One row per response that is completed and was answered on this form's
- * version. Starts with a byte-order mark and uses CRLF line ends, so Excel
+ * version, leaving out the smoke test's. Starts with a byte-order mark and uses CRLF line ends, so Excel
  * reads the umlauts and the rows correctly.
  */
 export function toCsv(form: Form, responses: CsvResponse[], answers: CsvAnswer[]): string {
   const columns = form.questions.flatMap(columnsOf);
   const header = ["reference", "company_uid", "lang", "started_at", "completed_at", "minutes", ...columns.map((c) => c.name)];
   const lines = responses
-    .filter((r) => r.completed_at !== null && r.form_version === form.version)
+    .filter((r) => r.completed_at !== null && r.form_version === form.version && r.company_uid !== SMOKE_TAG)
     .map((r) => {
       const own = answers.filter((a) => a.response_id === r.id);
       return [

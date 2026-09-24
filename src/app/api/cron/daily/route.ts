@@ -1,11 +1,11 @@
 // GET /api/cron/daily — run by Vercel Cron once a day (vercel.json). Keeps the
-// Supabase project awake, deletes responses left unfinished for more than
-// seven days (design §7), and writes a private JSON
+// Supabase project awake, deletes the smoke test's responses and those left
+// unfinished for more than seven days (design §7), and writes a private JSON
 // export to Vercel Blob when a Blob token is configured. Only a caller with
 // CRON_SECRET may run it.
 import { timingSafeEqual } from "node:crypto";
 import { put } from "@vercel/blob";
-import { deleteUnfinishedBefore, touch } from "@/db";
+import { deleteSmokeResponses, deleteUnfinishedBefore, touch } from "@/db";
 import { serverEnv } from "@/env";
 import { buildExport } from "@/export";
 import { json } from "@/http";
@@ -26,6 +26,8 @@ export async function GET(request: Request): Promise<Response> {
   }
 
   await touch();
+  // cleanup first: a failing export below must not keep test or stale rows
+  const smoke = await deleteSmokeResponses();
   const deleted = await deleteUnfinishedBefore(new Date(Date.now() - SEVEN_DAYS_MS));
 
   let exported = 0;
@@ -41,5 +43,5 @@ export async function GET(request: Request): Promise<Response> {
     exported = data.responses.length;
   }
 
-  return json(200, { deleted, exported });
+  return json(200, { deleted, smoke, exported });
 }

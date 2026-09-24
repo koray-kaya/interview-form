@@ -25,3 +25,7 @@ CLAUDE.local.md
 
 # Milestone explanations are written for one reader, in Turkish
 docs/milestones/
+
+# Playwright
+test-results/
+playwright-report/

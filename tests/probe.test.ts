@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { APICallError } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 import { FORM, type OpenQuestion } from "@/form";
-import { buildPrompt, postCheck, runProbe, type ProbeInput, type ProbeOutput } from "@/probe";
+import { buildPrompt, postCheck, resolvedRegion, runProbe, type ProbeInput, type ProbeOutput } from "@/probe";
 
 const open = (id: string) => FORM.questions.find((q) => q.id === id) as OpenQuestion;
 
@@ -233,5 +233,56 @@ describe("runProbe", () => {
     const result = await runProbe(input, { model: modelReturning("{ not json at all") });
     expect(result.decision).toBe("error");
     expect(result.errorClass).toBe("schema");
+  });
+});
+
+describe("where the model runs", () => {
+  it("asks the gateway for EU inference and no training", async () => {
+    const sent: unknown[] = [];
+    await runProbe(input, { model: modelReturning(answered({}), sent) });
+    const gateway = (sent[0] as { providerOptions?: { gateway?: Record<string, unknown> } }).providerOptions?.gateway;
+    expect(gateway?.inferenceRegion).toEqual({ scope: "zone", geoRegion: "eu" });
+    expect(gateway?.disallowPromptTraining).toBe(true);
+  });
+
+  it("does not ask for zero data retention, which the Hobby plan refuses with 403", async () => {
+    // measured 2026-09-24: with zeroDataRetention every call failed, and the
+    // form silently lost all follow-ups
+    const sent: unknown[] = [];
+    await runProbe(input, { model: modelReturning(answered({}), sent) });
+    const gateway = (sent[0] as { providerOptions?: { gateway?: Record<string, unknown> } }).providerOptions?.gateway;
+    expect(gateway).not.toHaveProperty("zeroDataRetention");
+  });
+
+  it("reads the region the gateway reports, from the last provider attempt that names one", () => {
+    const metadata = {
+      gateway: {
+        routing: {
+          finalProvider: "bedrock",
+          modelAttempts: [
+            { providerAttempts: [{ provider: "bedrock", inferenceEndpoint: { slug: "geo-eu", scope: "zone", geoRegion: "eu" } }] },
+          ],
+        },
+      },
+    };
+    expect(resolvedRegion(metadata)).toBe("eu");
+  });
+
+  it("reports no region when the gateway says nothing, or routed globally", () => {
+    expect(resolvedRegion(undefined)).toBeUndefined();
+    expect(resolvedRegion({ gateway: {} })).toBeUndefined();
+    expect(resolvedRegion({ gateway: { routing: { modelAttempts: [{ providerAttempts: [{ inferenceEndpoint: null }] }] } } })).toBeUndefined();
+  });
+
+  it("keeps the form going when the EU cannot serve the call", async () => {
+    const refused = new APICallError({
+      message: "no provider can serve the requested region",
+      url: "https://ai-gateway.vercel.sh",
+      requestBodyValues: {},
+      statusCode: 400,
+    });
+    const result = await runProbe(input, { model: modelThrowing(refused) });
+    expect(result.decision).toBe("error");
+    expect(result.errorClass).toBe("provider");
   });
 });
