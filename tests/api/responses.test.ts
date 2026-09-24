@@ -33,22 +33,28 @@ beforeEach(() => {
 });
 
 describe("POST /api/responses", () => {
-  it("creates a response with the form version and no probing yet", async () => {
+  it("creates a response with the form version and the trimmed tag", async () => {
     const response = await create({ c: " CHE123456789 ", lang: "de", consent: true });
     expect(response.status).toBe(201);
-    expect(await response.json()).toEqual({ id: ID, probeAllowed: false });
+    expect(await response.json()).toEqual({ id: ID, probeAllowed: true });
     expect(db.createResponse).toHaveBeenCalledWith({
       companyUid: "CHE123456789",
       lang: "de",
       formVersion: FORM_VERSION,
-      probeAllowed: false,
+      probeAllowed: true,
     });
   });
 
-  it("allows probing only for a tag with a valid UID check digit", async () => {
-    const response = await create({ c: "CHE-123.456.788", lang: "de", consent: true });
-    expect(await response.json()).toEqual({ id: ID, probeAllowed: true });
-    expect(vi.mocked(db.createResponse).mock.calls[0][0]).toMatchObject({ companyUid: "CHE-123.456.788", probeAllowed: true });
+  it("allows the AI follow-ups for every link except the smoke test's (decided 2026-09-24)", async () => {
+    // the monthly budget caps the cost; a valid UID is no longer required
+    for (const c of ["CHE-123.456.788", "CHE123456789", "P-7K3Q9X", undefined]) {
+      vi.mocked(db.createResponse).mockClear();
+      await create({ c, lang: "de", consent: true });
+      expect(vi.mocked(db.createResponse).mock.calls[0][0].probeAllowed).toBe(true);
+    }
+    vi.mocked(db.createResponse).mockClear();
+    await create({ c: "SMOKE", lang: "en", consent: true });
+    expect(vi.mocked(db.createResponse).mock.calls[0][0].probeAllowed).toBe(false);
   });
 
   it("stores no tag when c is missing or empty", async () => {

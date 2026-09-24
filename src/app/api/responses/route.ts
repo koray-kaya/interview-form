@@ -1,12 +1,13 @@
 // POST /api/responses — starts a response once the participant has consented.
-// The company tag (?c=) is stored as given; it is a label, never identity.
-// AI follow-ups are allowed only when the tag is a valid Swiss UID (a cost
-// gate: a stripped or made-up tag gets the fixed questions only).
+// The link's tag (?c=) is stored as given: a company number (UID), a personal
+// code from the admin page, or nothing. It is a label, never identity. AI
+// follow-ups run for every response except the smoke test's (decided
+// 2026-09-24; the monthly AI Gateway budget caps the cost).
 import { z } from "zod";
 import { createResponse } from "@/db";
 import { FORM_VERSION } from "@/form";
 import { json, readJson } from "@/http";
-import { isValidUid } from "@/uid";
+import { SMOKE_TAG } from "@/responses";
 
 const Body = z.object({
   c: z.string().max(32).optional(),
@@ -19,7 +20,7 @@ export async function POST(request: Request): Promise<Response> {
   if (!parsed.ok) return parsed.response;
 
   const tag = parsed.data.c?.trim() || null;
-  const probeAllowed = tag !== null && isValidUid(tag);
+  const probeAllowed = tag !== SMOKE_TAG;
   const id = await createResponse({
     companyUid: tag,
     lang: parsed.data.lang,

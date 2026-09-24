@@ -17,10 +17,14 @@ produced every question.
 
 Decided (2026-09-21), details in the design doc:
 - The form is a TypeScript file (`src/form.ts`) with a version; no form
-  builder, no admin page. Changing a question means changing that file.
-- The link carries the invited company's public register number (`?c=`);
-  the participant is never asked who they are. The tag is a label, not
-  authentication; it only gates the AI cost.
+  builder. Changing a question means changing that file. One admin page
+  (`/admin`, behind `ADMIN_PASSWORD`; 2026-09-24) shows counts and makes
+  invitation links — never answer text.
+- The link carries a tag (`?c=`): the invited company's public register
+  number, or a personal code (`P-XXXXXX`) from the admin page; the
+  participant is never asked who they are. The tag is a label, not
+  authentication. Since 2026-09-24 every response gets the AI follow-ups
+  (except the smoke test's); the AI Gateway budget caps the cost.
 - AI follow-ups only on the three open questions, at most two each, only
   when the named element is missing. The limit is code (`maxFollowUps` in
   `form.ts`); what the model looks for is in each question's own versioned

@@ -7,6 +7,7 @@ import type { AnswerValue } from "@/engine";
 import type { Lang } from "@/i18n";
 import { serverEnv } from "@/env";
 import { SMOKE_TAG } from "@/responses";
+import type { StatsCall, StatsResponse } from "@/stats";
 
 export type ResponseRow = {
   id: string;
@@ -174,6 +175,18 @@ export async function deleteSmokeResponses(): Promise<number> {
 /** One cheap read, so the project counts as active (Supabase Free pauses idle projects). */
 export async function touch(): Promise<void> {
   check(await db().from("responses").select("id").limit(1), "touch");
+}
+
+/** The few columns the admin page counts; no answer text. */
+export async function readStats(): Promise<{ responses: StatsResponse[]; calls: StatsCall[] }> {
+  const [responses, calls] = await Promise.all([
+    db().from("responses").select("company_uid, lang, form_version, created_at, completed_at"),
+    db().from("probe_calls").select("decision"),
+  ]);
+  return {
+    responses: must(responses, "readStats responses") as StatsResponse[],
+    calls: must(calls, "readStats probe_calls") as StatsCall[],
+  };
 }
 
 /** Every row of the three tables, for the export. */
