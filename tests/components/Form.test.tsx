@@ -59,7 +59,7 @@ describe("Form", () => {
 
   it("switches language on the welcome screen", async () => {
     render(<Form initialLang="de" />);
-    expect(screen.getByRole("heading", { name: /Schweizer Unternehmen/ })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Schweizer Firmen/ })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "English" }));
     expect(screen.getByRole("heading", { name: /Swiss firms/ })).toBeInTheDocument();
     expect(document.documentElement.lang).toBe("en");

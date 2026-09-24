@@ -6,16 +6,26 @@ import type { Text } from "@/i18n";
 export const CONTACT_EMAIL = "koray.kaya@ost.ch";
 
 export const UI = {
-  title: { de: "Wie Schweizer Unternehmen andere Unternehmen unter die Lupe nehmen", en: "How Swiss firms look into other companies" },
+  title: { de: "Wie Schweizer Firmen andere Firmen finden und prüfen", en: "How Swiss firms find and assess other companies" },
   intro: {
-    de: "Ich bin Masterstudent in der Schweiz. Meine Arbeit fragt, wie Schweizer Unternehmen sich über andere Unternehmen informieren — einen möglichen Kunden, einen Lieferanten, einen Mitbewerber — und was sie das heute kostet. 8 kurze Fragen, etwa 6 Minuten. Es gibt keine richtigen Antworten; mich interessiert, wie Sie tatsächlich arbeiten.",
-    en: "I am a master's student in Switzerland. My thesis asks how Swiss firms find out about other companies — a possible customer, a supplier, a competitor — and what that costs them today. 8 short questions, about 6 minutes. There are no right answers; I am interested in how you actually work.",
+    de: "Ich bin Koray Kaya und schreibe meine Masterarbeit an der OST, der Ostschweizer Fachhochschule. Dafür stelle ich Firmen in der Ostschweiz eine einzige Frage: Wie informieren Sie sich heute über andere Firmen, etwa einen möglichen Kunden, einen Lieferanten oder einen Mitbewerber, und was kostet Sie das?",
+    en: "I'm Koray Kaya, and I'm writing my master's thesis at OST, the Eastern Switzerland University of Applied Sciences. For it, I'm asking firms in eastern Switzerland one question: how do you find out about other companies today, say a possible customer, a supplier or a competitor, and what does that cost you?",
   },
-  privacy: {
-    de: "Dieser Link ist für Ihr Unternehmen bestimmt. Ich nutze das nur, um Sie nicht zweimal einzuladen und um Sie zu erreichen, wenn Sie das wünschen. Ergebnisse werden ohne Firmennamen berichtet. Drei Ihrer schriftlichen Antworten können ein bis zwei kurze Rückfragen erhalten, die ein KI-Dienst formuliert (Anthropic, über Vercel); diese Antworten werden nicht zum Training von Modellen verwendet. Die Daten werden in der Schweiz gespeichert (Supabase, Zürich). Sie können jederzeit abbrechen; unvollständige Antworten werden gelöscht.",
-    en: "This link is specific to your company. I use that only to avoid inviting you twice and to reach you if you ask me to. Results are reported without company names. Three of your written answers may receive one or two short follow-up questions written by an AI service (Anthropic, via Vercel); those answers are not used to train models. Data is stored in Switzerland (Supabase, Zurich). You can stop at any time; unfinished answers are deleted.",
+  /** Starts with the number of questions; a test holds it to the form. */
+  howLong: {
+    de: "14 kurze Fragen, etwa 10 Minuten: drei zum Schreiben, der Rest zum Antippen. Es gibt keine richtigen Antworten; mich interessiert, wie Sie tatsächlich arbeiten.",
+    en: "14 short questions, about 10 minutes: three to write, the rest to tap. There are no right answers; I want to know how you actually work.",
   },
-  consent: { de: "Ich habe das gelesen und nehme teil.", en: "I have read this and agree to take part." },
+  promise: {
+    de: "Ihre Antworten werden nur für diese Masterarbeit verwendet und ohne Firmennamen ausgewertet. Auf drei Ihrer schriftlichen Antworten kann eine kurze Rückfrage folgen; diese Rückfrage schreibt eine KI. Sie können jederzeit abbrechen.",
+    en: "Your answers are used only for this thesis and reported without company names. Three of your written answers may get a short follow-up question, written by an AI. You can stop at any time.",
+  },
+  detailsLabel: { de: "Details", en: "Details" },
+  details: {
+    de: `Dieser Link ist für Ihre Firma bestimmt; ich nutze das nur, um Sie nicht zweimal einzuladen und um Sie zu erreichen, wenn Sie das wünschen. Die Antworten werden in der Schweiz gespeichert. Verantwortlich: Koray Kaya, OST, ${CONTACT_EMAIL}. Wenn Sie den Referenzcode von der letzten Seite an diese Adresse schicken, werden Ihre Antworten gelöscht.`,
+    en: `This link is meant for your company; I use that only to avoid inviting you twice and to reach you if you wish. Answers are stored in Switzerland. Responsible: Koray Kaya, OST, ${CONTACT_EMAIL}. Send the reference code from the last page to this address and your answers will be deleted.`,
+  },
+  consent: { de: "Ich habe das gelesen und mache mit.", en: "I have read this and agree to take part." },
   start: { de: "Start", en: "Start" },
   ok: { de: "OK", en: "OK" },
   back: { de: "Zurück", en: "Back" },

@@ -1,6 +1,7 @@
 "use client";
-// The first screen: title, study text, privacy text, language toggle, the
-// consent checkbox and Start. Start stays disabled until the box is ticked.
+// The first screen: title, study text, what the answers are used for, the
+// details fold, language toggle, the consent checkbox and Start. Start stays
+// disabled until the box is ticked.
 import { useState } from "react";
 import { t, type Lang } from "@/i18n";
 import { UI } from "@/texts";
@@ -31,7 +32,15 @@ export function Welcome({ lang, onLang, onStart }: Props) {
 
       <h1 className="text-3xl font-semibold leading-tight tracking-tight text-foreground sm:text-4xl">{t(UI.title, lang)}</h1>
       <p className="text-lg leading-relaxed text-body">{t(UI.intro, lang)}</p>
-      <p className="rounded-xl border border-border bg-white/70 p-5 text-[0.95rem] leading-relaxed text-body">{t(UI.privacy, lang)}</p>
+      <p className="text-lg leading-relaxed text-body">{t(UI.howLong, lang)}</p>
+      <div className="rounded-xl border border-border bg-white/70 p-5 text-[0.95rem] leading-relaxed text-body">
+        <p>{t(UI.promise, lang)}</p>
+        {/* the data-protection details, one tap away (design §3, decision 4) */}
+        <details className="group mt-3">
+          <summary className="cursor-pointer font-medium text-accent marker:text-accent">{t(UI.detailsLabel, lang)}</summary>
+          <p className="mt-2">{t(UI.details, lang)}</p>
+        </details>
+      </div>
 
       <label className="flex cursor-pointer items-start gap-3 text-lg text-foreground">
         <input
