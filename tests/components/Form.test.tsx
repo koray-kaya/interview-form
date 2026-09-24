@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 vi.mock("@/api", async () => (await import("../support/fakeApi")).fakeApi);
@@ -25,16 +25,28 @@ async function choose(name: RegExp) {
 
 const only = () => [...server.responses.values()][0];
 
+async function tick(name: RegExp) {
+  await userEvent.click(screen.getByRole("checkbox", { name }));
+  await userEvent.click(screen.getByRole("button", { name: "OK" }));
+}
+
+/** Every row of the activities screen set to one point of the scale, then OK. */
+async function everyRow(point: string) {
+  for (const row of screen.getAllByRole("radiogroup")) {
+    await userEvent.click(within(row).getByRole("radio", { name: point }));
+  }
+  await userEvent.click(screen.getByRole("button", { name: "OK" }));
+}
+
 /** The path to `case`, the first question the model may follow up on. */
 async function reachCase() {
   await start("en");
   await choose(/Owner/);
   await screen.findByText(/How many people/);
   await choose(/10–49/);
-  await screen.findByText(/did you look into another company/);
-  await userEvent.click(screen.getByRole("checkbox", { name: /a new customer/ }));
-  await userEvent.click(screen.getByRole("button", { name: "OK" }));
-  await screen.findByText(/Think of the most recent case/);
+  await screen.findByText(/Who are your customers/);
+  await choose(/Businesses/);
+  await screen.findByText(/Think of the last time/);
 }
 
 describe("Form", () => {
@@ -79,7 +91,7 @@ describe("Form", () => {
     await userEvent.type(screen.getByRole("textbox"), "We looked into a supplier.{Enter}");
     expect(await screen.findByText("Where did you look?")).toBeInTheDocument();
     // the question and the answer stay on screen, the answer no longer editable
-    expect(screen.getByText(/Think of the most recent case/)).toBeInTheDocument();
+    expect(screen.getByText(/Think of the last time/)).toBeInTheDocument();
     expect(screen.getByText("We looked into a supplier.")).toBeInTheDocument();
     expect(screen.getByRole("textbox")).toHaveValue("");
   });
@@ -91,7 +103,7 @@ describe("Form", () => {
     await userEvent.type(screen.getByRole("textbox"), "We looked into a supplier.{Enter}");
     await screen.findByText("Where did you look?");
     await userEvent.type(screen.getByRole("textbox"), "The commercial register.{Enter}");
-    await screen.findByText(/how long did that take/i);
+    await screen.findByText(/how much working time/i);
     expect(fakeApi.postAnswer).toHaveBeenLastCalledWith(
       expect.any(String), "case", { text: "The commercial register." }, "en", 1,
     );
@@ -116,24 +128,49 @@ describe("Form", () => {
   });
 
   it("walks the short path to the thank-you screen with a reference code", async () => {
-    await start("en");
-    await choose(/Owner/);
-    await screen.findByText(/How many people/);
-    await choose(/10–49/);
-    await screen.findByText(/did you look into another company/);
-    await userEvent.click(screen.getByRole("checkbox", { name: /none of these/ }));
-    await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    await reachCase();
+    await userEvent.click(screen.getByRole("button", { name: /think of such a case/ }));
     await screen.findByText(/where does it get stuck/);
     await userEvent.type(screen.getByRole("textbox"), "Finding the right person.{Enter}");
-    await screen.findByText(/what would a really good result/);
-    await userEvent.type(screen.getByRole("textbox"), "A short list I could call.{Enter}");
+    await screen.findByText(/How often did this happen/);
+    await everyRow("Never");
+    await screen.findByText(/Who usually does this/);
+    await choose(/Mostly me/);
+    await screen.findByText(/did it happen that you/);
+    await tick(/None of these/);
     await screen.findByText(/Would you be open to/);
-    await userEvent.click(screen.getByRole("checkbox", { name: /neither/ }));
-    await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    await tick(/neither/);
     expect(await screen.findByText("Thank you")).toBeInTheDocument();
     expect(screen.getByText("00000000")).toBeInTheDocument();
     expect(screen.getByText(/koray\.kaya@ost\.ch/)).toBeInTheDocument();
     expect(only().completed).toBe(true);
+  });
+
+  it("walks all fourteen screens when a case is told", async () => {
+    await reachCase();
+    await userEvent.type(screen.getByRole("textbox"), "I asked a colleague.{Enter}");
+    await screen.findByText(/how much working time/i);
+    await choose(/Up to 2 hours/);
+    await screen.findByText(/Did it cost anything/);
+    await tick(/A paid extract or report/);
+    await screen.findByText(/did you find what you were looking for/);
+    await choose(/Partly/);
+    await screen.findByText(/where does it get stuck/);
+    await userEvent.type(screen.getByRole("textbox"), "Finding the right person.{Enter}");
+    await screen.findByText(/what would a really good result/);
+    await userEvent.type(screen.getByRole("textbox"), "A short list I could call.{Enter}");
+    await screen.findByText(/How often did this happen/);
+    await everyRow("About monthly");
+    await screen.findByText(/Who usually does this/);
+    await choose(/Mostly me/);
+    await screen.findByText(/did it happen that you/);
+    await tick(/because there was no time/);
+    await screen.findByText(/whom did you ask/);
+    await tick(/The company's website/);
+    await screen.findByText(/Would you be open to/);
+    await tick(/neither/);
+    expect(await screen.findByText("Thank you")).toBeInTheDocument();
+    expect(Object.keys(only().answers)).toHaveLength(14);
   });
 
   it("resumes after a reload from the server", async () => {
@@ -183,44 +220,32 @@ describe("Form", () => {
     await choose(/Sales/);
     await screen.findByText(/How many people/);
     await choose(/10–49/);
-    await screen.findByText(/did you look into another company/);
+    await screen.findByText(/Who are your customers/);
     await userEvent.click(screen.getByRole("button", { name: "Back" }));
     await userEvent.click(screen.getByRole("button", { name: "Back" }));
     await userEvent.click(screen.getByRole("button", { name: "OK" }));
     expect(await screen.findByText(/How many people/)).toBeInTheDocument();
   });
 
-  it("drops the case answer on the server when relations is changed to none", async () => {
-    await start("en");
-    await choose(/Sales/);
-    await screen.findByText(/How many people/);
-    await choose(/10–49/);
-    await screen.findByText(/did you look into another company/);
-    await userEvent.click(screen.getByRole("checkbox", { name: /a new customer/ }));
-    await userEvent.click(screen.getByRole("button", { name: "OK" }));
-    await screen.findByText(/most recent case/);
+  it("drops what the escape skips, on the server too, when the case is escaped after all", async () => {
+    await reachCase();
     await userEvent.type(screen.getByRole("textbox"), "I asked a colleague.{Enter}");
-    await screen.findByText(/how long did that take/i);
-    expect(only().answers.case).toEqual({ text: "I asked a colleague." });
+    await screen.findByText(/how much working time/i);
+    await choose(/Up to 2 hours/);
+    await screen.findByText(/Did it cost anything/);
+    expect(only().answers.duration).toEqual({ option: "lt2h" });
     await userEvent.click(screen.getByRole("button", { name: "Back" }));
     await userEvent.click(screen.getByRole("button", { name: "Back" }));
-    await userEvent.click(screen.getByRole("checkbox", { name: /none of these/ }));
-    await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    await userEvent.click(screen.getByRole("button", { name: /think of such a case/ }));
     expect(await screen.findByText(/where does it get stuck/)).toBeInTheDocument();
-    expect(only().answers.case).toBeUndefined();
+    expect(only().answers.case).toEqual({ option: "none" });
+    expect(only().answers.duration).toBeUndefined();
   });
 
   it("ArrowUp inside a text answer moves the cursor, it does not go back", async () => {
-    await start("en");
-    await choose(/Sales/);
-    await screen.findByText(/How many people/);
-    await choose(/10–49/);
-    await screen.findByText(/did you look into another company/);
-    await userEvent.click(screen.getByRole("checkbox", { name: /a new customer/ }));
-    await userEvent.click(screen.getByRole("button", { name: "OK" }));
-    await screen.findByText(/most recent case/);
+    await reachCase();
     await userEvent.type(screen.getByRole("textbox"), "first line{Shift>}{Enter}{/Shift}second{ArrowUp}");
-    expect(screen.getByText(/most recent case/)).toBeInTheDocument();
+    expect(screen.getByText(/Think of the last time/)).toBeInTheDocument();
   });
 
   it("ArrowUp elsewhere goes back", async () => {

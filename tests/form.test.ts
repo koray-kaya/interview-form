@@ -1,54 +1,101 @@
 import { describe, expect, it } from "vitest";
-import { FORM, FORM_VERSION } from "@/form";
+import { FORM, FORM_VERSION, type Option } from "@/form";
+
+const q = (id: string) => FORM.questions.find((x) => x.id === id)!;
+const ids = (options: Option[]) => options.map((o) => o.id);
+const options = (id: string) => {
+  const x = q(id);
+  return x.type === "single" || x.type === "multi" ? ids(x.options) : [];
+};
 
 describe("FORM", () => {
-  it("has a semantic version", () => {
-    expect(FORM_VERSION).toMatch(/^\d+\.\d+\.\d+$/);
+  it("is version 2.0.0", () => {
+    expect(FORM_VERSION).toBe("2.0.0");
     expect(FORM.version).toBe(FORM_VERSION);
   });
 
-  it("has eight questions with unique ids", () => {
-    const ids = FORM.questions.map((q) => q.id);
-    expect(ids).toEqual(["role", "size", "relations", "case", "duration", "pains", "gains", "followup"]);
-    expect(new Set(ids).size).toBe(ids.length);
+  it("has the fourteen approved questions, in order, with unique ids", () => {
+    const all = FORM.questions.map((x) => x.id);
+    expect(all).toEqual([
+      "role", "size", "customers", "case", "duration", "cost", "result",
+      "pains", "gains", "activities", "who", "skipped", "sources", "followup",
+    ]);
+    expect(new Set(all).size).toBe(all.length);
   });
 
-  it("has both languages on every text and option", () => {
-    for (const q of FORM.questions) {
-      expect(q.text.de.length).toBeGreaterThan(0);
-      expect(q.text.en.length).toBeGreaterThan(0);
-      if (q.type === "single" || q.type === "multi") {
-        expect(q.options.length).toBeGreaterThan(1);
-        expect(new Set(q.options.map((o) => o.id)).size).toBe(q.options.length);
-        for (const o of q.options) {
-          expect(o.label.de.length).toBeGreaterThan(0);
-          expect(o.label.en.length).toBeGreaterThan(0);
-        }
-      }
+  it("has both languages on every text, option, row, scale point and escape", () => {
+    const labels: Option[] = [];
+    for (const x of FORM.questions) {
+      expect(x.text.de.length, x.id).toBeGreaterThan(0);
+      expect(x.text.en.length, x.id).toBeGreaterThan(0);
+      if (x.type === "single" || x.type === "multi") labels.push(...x.options);
+      if (x.type === "rows") labels.push(...x.rows, ...x.scale);
+      if (x.type === "open" && x.escape) labels.push(x.escape);
+    }
+    for (const o of labels) {
+      expect(o.label.de.length, o.id).toBeGreaterThan(0);
+      expect(o.label.en.length, o.id).toBeGreaterThan(0);
     }
   });
 
-  it("probes only the three open questions, two follow-ups each", () => {
-    const probed = FORM.questions.filter((q) => q.type === "open" && q.probe);
-    expect(probed.map((q) => q.id)).toEqual(["case", "pains", "gains"]);
-    for (const q of probed) {
-      if (q.type === "open" && q.probe) expect(q.probe.maxFollowUps).toBe(2);
+  it("writes German the Swiss way: no ß anywhere", () => {
+    expect(JSON.stringify(FORM)).not.toContain("ß");
+  });
+
+  it("has unique option ids within each question", () => {
+    for (const x of FORM.questions) {
+      const own = x.type === "rows" ? [ids(x.rows), ids(x.scale)] : x.type === "open" ? [] : [ids(x.options)];
+      for (const list of own) expect(new Set(list).size, x.id).toBe(list.length);
     }
+  });
+
+  it("probes only the three open questions, two follow-ups each, pains and gains with the case as context", () => {
+    const probed = FORM.questions.filter((x) => x.type === "open" && x.probe);
+    expect(probed.map((x) => x.id)).toEqual(["case", "pains", "gains"]);
+    for (const x of probed) if (x.type === "open" && x.probe) expect(x.probe.maxFollowUps).toBe(2);
+    const context = (id: string) => { const x = q(id); return x.type === "open" ? x.probe?.context : undefined; };
+    expect(context("case")).toBeUndefined();
+    expect(context("pains")).toEqual(["case"]);
+    expect(context("gains")).toEqual(["case"]);
   });
 
   it("caps open answers at 4000 characters", () => {
-    for (const q of FORM.questions) if (q.type === "open") expect(q.maxChars).toBe(4000);
+    for (const x of FORM.questions) if (x.type === "open") expect(x.maxChars).toBe(4000);
   });
 
-  it("skips case and duration when relations is none", () => {
-    expect(FORM.skips).toEqual([{ when: { question: "relations", is: "none" }, skip: ["case", "duration"] }]);
-    const relations = FORM.questions.find((q) => q.id === "relations");
-    expect(relations?.type === "multi" && relations.exclusive).toEqual(["none"]);
+  it("offers the escape on case only", () => {
+    expect(FORM.questions.filter((x) => x.type === "open" && x.escape).map((x) => x.id)).toEqual(["case"]);
+    const c = q("case");
+    expect(c.type === "open" && c.escape?.id).toBe("none");
+  });
+
+  it("has the two skip rules", () => {
+    expect(FORM.skips).toEqual([
+      { when: { question: "case", is: "none" }, skip: ["duration", "cost", "result", "gains"] },
+      { when: { question: "activities", every: "never" }, skip: ["sources"] },
+    ]);
+  });
+
+  it("keeps the exclusive options alone", () => {
+    const exclusive = (id: string) => { const x = q(id); return x.type === "multi" ? x.exclusive : undefined; };
+    expect(exclusive("cost")).toEqual(["no", "dont-know"]);
+    expect(exclusive("skipped")).toEqual(["none"]);
+    expect(exclusive("followup")).toEqual(["neither"]);
+    expect(exclusive("sources")).toBeUndefined();
+  });
+
+  it("pins the categories the impact evaluation asks again", () => {
+    expect(options("duration")).toEqual(["lt30m", "lt2h", "halfday", "day", "days"]);
+    expect(options("cost")).toEqual(["no", "paid-report", "subscription", "outside-help", "dont-know"]);
+    expect(options("result")).toEqual(["yes", "partly", "no-went-ahead", "no-gave-up"]);
+    const a = q("activities");
+    expect(a.type === "rows" && ids(a.rows)).toEqual(["new-customers", "new-suppliers", "one-company", "competitors", "own-position"]);
+    expect(a.type === "rows" && ids(a.scale)).toEqual(["never", "1-2", "3-6", "monthly", "weekly"]);
   });
 
   it("asks for an e-mail on followup unless neither is chosen", () => {
-    const f = FORM.questions.find((q) => q.id === "followup");
-    expect(f?.type === "multi" && f.email?.unlessOption).toBe("neither");
+    const f = q("followup");
+    expect(f.type === "multi" && f.email?.unlessOption).toBe("neither");
   });
 
   it("names skip conditions before the questions they skip", () => {

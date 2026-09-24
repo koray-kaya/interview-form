@@ -255,10 +255,13 @@ describe("POST /api/responses/:id/answers", () => {
     expect(db.saveAnswer).not.toHaveBeenCalled();
   });
 
-  it("prunes case and duration when relations becomes none", async () => {
-    stored([row("relations", { options: ["customer"] }), row("case", { text: "c" }), row("duration", { option: "lt2h" })]);
-    await answer({ questionId: "relations", followupIndex: 0, value: { options: ["none"] } });
-    expect(vi.mocked(db.saveAnswer).mock.calls[0][0].pruned).toEqual(["case", "duration"]);
+  it("prunes duration, cost, result and gains when the case is escaped", async () => {
+    stored([
+      row("case", { text: "c" }), row("duration", { option: "lt2h" }), row("cost", { options: ["no"] }),
+      row("result", { option: "yes" }), row("pains", { text: "p" }), row("gains", { text: "g" }),
+    ]);
+    await answer({ questionId: "case", followupIndex: 0, value: { option: "none" } });
+    expect(vi.mocked(db.saveAnswer).mock.calls[0][0].pruned).toEqual(["duration", "cost", "result", "gains"]);
   });
 
   it("does not store an e-mail the participant opted out of", async () => {
@@ -275,10 +278,10 @@ describe("POST /api/responses/:id/answers", () => {
     expect(db.saveAnswer).not.toHaveBeenCalled();
   });
 
-  it("refuses an unknown question, a skipped question and a follow-up index before M3", async () => {
-    stored([row("relations", { options: ["none"] })]);
+  it("refuses an unknown question, a skipped question and an unasked follow-up", async () => {
+    stored([row("case", { option: "none" })]);
     expect((await answer({ questionId: "nope", followupIndex: 0, value: { text: "x" } })).status).toBe(400);
-    expect((await answer({ questionId: "case", followupIndex: 0, value: { text: "x" } })).status).toBe(400);
+    expect((await answer({ questionId: "duration", followupIndex: 0, value: { option: "lt2h" } })).status).toBe(400);
     expect((await answer({ questionId: "role", followupIndex: 1, value: { option: "sales" } })).status).toBe(400);
     expect(db.saveAnswer).not.toHaveBeenCalled();
   });

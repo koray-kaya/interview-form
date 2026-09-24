@@ -12,9 +12,11 @@ import { POST } from "@/app/api/responses/[id]/complete/route";
 
 const ID = "3f1c2b7a-9d4e-4c1a-8b2f-0a1b2c3d4e5f";
 const row = (question_id: string, value: AnswerRow["value"]): AnswerRow => ({ question_id, followup_index: 0, question_text: "…", value });
+const NEVER = { "new-customers": "never", "new-suppliers": "never", "one-company": "never", competitors: "never", "own-position": "never" };
 const SHORT_PATH = [
-  row("role", { option: "owner" }), row("size", { option: "1-9" }), row("relations", { options: ["none"] }),
-  row("pains", { text: "p" }), row("gains", { text: "g" }), row("followup", { options: ["neither"] }),
+  row("role", { option: "owner" }), row("size", { option: "1-9" }), row("customers", { option: "businesses" }),
+  row("case", { option: "none" }), row("pains", { text: "p" }), row("activities", { rows: NEVER }),
+  row("who", { option: "me" }), row("skipped", { options: ["none"] }), row("followup", { options: ["neither"] }),
 ];
 
 function stored(answers: AnswerRow[], overrides: Partial<ResponseRow> = {}) {

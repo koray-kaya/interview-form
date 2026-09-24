@@ -9,17 +9,35 @@ import {
 
 const q = (id: string) => FORM.questions.find((x) => x.id === id)!;
 
+const NEVER = { "new-customers": "never", "new-suppliers": "never", "one-company": "never", competitors: "never", "own-position": "never" };
+
+/** The shortest complete path: the case escaped, every activity never. */
+const SHORT: Answers = {
+  role: { option: "owner" }, size: { option: "1-9" }, customers: { option: "businesses" }, case: { option: "none" },
+  pains: { text: "p" }, activities: { rows: NEVER }, who: { option: "me" }, skipped: { options: ["none"] },
+  followup: { options: ["neither"] },
+};
+
+/** Every screen answered. */
+const FULL: Answers = {
+  role: { option: "owner" }, size: { option: "1-9" }, customers: { option: "businesses" }, case: { text: "c" },
+  duration: { option: "lt2h" }, cost: { options: ["no"] }, result: { option: "yes" }, pains: { text: "p" },
+  gains: { text: "g" }, activities: { rows: { ...NEVER, competitors: "monthly" } }, who: { option: "me" },
+  skipped: { options: ["none"] }, sources: { options: ["website"] }, followup: { options: ["neither"] },
+};
+
 describe("skips", () => {
-  it("skips case and duration when relations is none", () => {
-    const answers: Answers = { relations: { options: ["none"] } };
-    expect(isSkipped(FORM, "case", answers)).toBe(true);
-    expect(isSkipped(FORM, "duration", answers)).toBe(true);
-    expect(isSkipped(FORM, "pains", answers)).toBe(false);
-    expect(activeQuestions(FORM, answers).map((x) => x.id)).toEqual(["role", "size", "relations", "pains", "gains", "followup"]);
+  it("escaping the case skips duration, cost, result and gains", () => {
+    expect(activeQuestions(FORM, { case: { option: "none" } }).map((x) => x.id)).toEqual([
+      "role", "size", "customers", "case", "pains", "activities", "who", "skipped", "sources", "followup",
+    ]);
+  });
+  it("never in every activity row skips sources, one other answer keeps it", () => {
+    expect(isSkipped(FORM, "sources", { activities: { rows: NEVER } })).toBe(true);
+    expect(isSkipped(FORM, "sources", { activities: { rows: { ...NEVER, competitors: "monthly" } } })).toBe(false);
   });
   it("skips nothing otherwise", () => {
-    const answers: Answers = { relations: { options: ["customer"] } };
-    expect(activeQuestions(FORM, answers).length).toBe(8);
+    expect(activeQuestions(FORM, FULL).length).toBe(14);
   });
 });
 
@@ -29,27 +47,25 @@ describe("nextQuestion / previousQuestion", () => {
     expect(nextQuestion(FORM, { role: { option: "owner" } })?.id).toBe("size");
   });
   it("jumps over skipped questions", () => {
-    const answers: Answers = { role: { option: "owner" }, size: { option: "1-9" }, relations: { options: ["none"] } };
+    const answers: Answers = { role: { option: "owner" }, size: { option: "1-9" }, customers: { option: "both" }, case: { option: "none" } };
     expect(nextQuestion(FORM, answers)?.id).toBe("pains");
   });
   it("returns null when everything is answered", () => {
-    const answers: Answers = {
-      role: { option: "owner" }, size: { option: "1-9" }, relations: { options: ["none"] },
-      pains: { text: "x" }, gains: { text: "y" }, followup: { options: ["neither"] },
-    };
-    expect(nextQuestion(FORM, answers)).toBeNull();
+    expect(nextQuestion(FORM, SHORT)).toBeNull();
+    expect(nextQuestion(FORM, FULL)).toBeNull();
   });
   it("previous goes back over skipped questions and stops at the first", () => {
-    const answers: Answers = { role: { option: "owner" }, size: { option: "1-9" }, relations: { options: ["none"] } };
-    expect(previousQuestion(FORM, answers, "pains")?.id).toBe("relations");
-    expect(previousQuestion(FORM, answers, "role")).toBeNull();
+    expect(previousQuestion(FORM, { case: { option: "none" } }, "pains")?.id).toBe("case");
+    expect(previousQuestion(FORM, { activities: { rows: NEVER } }, "followup")?.id).toBe("skipped");
+    expect(previousQuestion(FORM, {}, "role")).toBeNull();
   });
 });
 
 describe("progress", () => {
   it("counts active questions only", () => {
-    expect(progress(FORM, {})).toEqual({ done: 0, total: 8 });
-    expect(progress(FORM, { role: { option: "owner" }, relations: { options: ["none"] } })).toEqual({ done: 2, total: 6 });
+    expect(progress(FORM, {})).toEqual({ done: 0, total: 14 });
+    expect(progress(FORM, { role: { option: "owner" }, case: { option: "none" } })).toEqual({ done: 2, total: 10 });
+    expect(progress(FORM, SHORT)).toEqual({ done: 9, total: 9 });
   });
 });
 
@@ -58,15 +74,25 @@ describe("validate", () => {
     expect(validate(q("role"), { options: [] }, "en")).toBe("Please choose an answer.");
     expect(validate(q("role"), { option: "owner" }, "en")).toBeNull();
   });
-  it("requires at least one multi choice and rejects none plus others", () => {
-    expect(validate(q("relations"), { options: [] }, "de")).toBe("Bitte wählen Sie eine Antwort.");
-    expect(validate(q("relations"), { options: ["none", "customer"] }, "en")).toBe("Please choose an answer.");
-    expect(validate(q("relations"), { options: ["customer", "supplier"] }, "en")).toBeNull();
+  it("requires a multi choice and keeps each exclusive option alone", () => {
+    expect(validate(q("cost"), { options: [] }, "de")).toBe("Bitte wählen Sie eine Antwort.");
+    expect(validate(q("cost"), { options: ["no", "paid-report"] }, "en")).toBe("Please choose an answer.");
+    expect(validate(q("cost"), { options: ["dont-know"] }, "en")).toBeNull();
+    expect(validate(q("cost"), { options: ["paid-report", "outside-help"] }, "en")).toBeNull();
+    expect(validate(q("skipped"), { options: ["none", "no-time"] }, "en")).toBe("Please choose an answer.");
   });
   it("requires open text and caps it", () => {
     expect(validate(q("case"), { text: "   " }, "en")).toBe("Please answer this question.");
     expect(validate(q("case"), { text: "a".repeat(4001) }, "en")).toBe("Please shorten your answer to 4,000 characters.");
     expect(validate(q("case"), { text: "I asked a colleague." }, "en")).toBeNull();
+  });
+  it("accepts the escape on case, nowhere else", () => {
+    expect(validate(q("case"), { option: "none" }, "en")).toBeNull();
+    expect(validate(q("pains"), { option: "none" }, "en")).toBe("Please answer this question.");
+  });
+  it("requires every activity row", () => {
+    expect(validate(q("activities"), { rows: NEVER }, "en")).toBeNull();
+    expect(validate(q("activities"), { rows: { "new-customers": "never" } }, "en")).toBe("Please choose an answer in every row.");
   });
   it("requires a valid e-mail unless neither is chosen", () => {
     expect(validate(q("followup"), { options: ["neither"] }, "en")).toBeNull();
@@ -91,7 +117,7 @@ describe("wantsEmail", () => {
     expect(wantsEmail(q("followup"), ["conversation", "trial"])).toBe(true);
     expect(wantsEmail(q("followup"), ["neither"])).toBe(false);
     expect(wantsEmail(q("followup"), [])).toBe(false);
-    expect(wantsEmail(q("relations"), ["customer"])).toBe(false);
+    expect(wantsEmail(q("skipped"), ["no-time"])).toBe(false);
   });
 });
 
@@ -103,7 +129,7 @@ describe("cleanAnswer", () => {
     expect(cleanAnswer(q("followup"), { options: ["conversation"], email: " a@b.ch " })).toEqual({ options: ["conversation"], email: "a@b.ch" });
   });
   it("drops an e-mail on a question that never asks for one", () => {
-    expect(cleanAnswer(q("relations"), { options: ["customer"], email: "a@b.ch" })).toEqual({ options: ["customer"] });
+    expect(cleanAnswer(q("sources"), { options: ["website"], email: "a@b.ch" })).toEqual({ options: ["website"] });
   });
   it("leaves other answers as they are", () => {
     expect(cleanAnswer(q("case"), { text: "  as typed  " })).toEqual({ text: "  as typed  " });
@@ -114,15 +140,15 @@ describe("cleanAnswer", () => {
 describe("pruneSkipped", () => {
   it("drops answers to questions that are now skipped", () => {
     const answers: Answers = {
-      relations: { options: ["none"] }, case: { text: "old case" }, duration: { option: "lt2h" }, pains: { text: "p" },
+      case: { option: "none" }, duration: { option: "lt2h" }, cost: { options: ["no"] }, result: { option: "yes" },
+      pains: { text: "p" }, gains: { text: "g" },
     };
-    expect(pruneSkipped(FORM, answers)).toEqual({ relations: { options: ["none"] }, pains: { text: "p" } });
+    expect(pruneSkipped(FORM, answers)).toEqual({ case: { option: "none" }, pains: { text: "p" } });
   });
   it("keeps everything when nothing is skipped, and does not mutate its input", () => {
-    const answers: Answers = { relations: { options: ["customer"] }, case: { text: "c" } };
-    const copy = structuredClone(answers);
-    expect(pruneSkipped(FORM, answers)).toEqual(copy);
-    expect(answers).toEqual(copy);
+    const copy = structuredClone(FULL);
+    expect(pruneSkipped(FORM, FULL)).toEqual(copy);
+    expect(FULL).toEqual(copy);
   });
   it("follows chains: a skipped answer no longer triggers the rules that depend on it", () => {
     const opt = (id: string) => ({ id, label: { de: id, en: id } });
@@ -145,9 +171,13 @@ describe("pruneSkipped", () => {
 
 describe("applyAnswer", () => {
   it("stores the cleaned answer and prunes what it skips", () => {
-    const before: Answers = { relations: { options: ["customer"] }, case: { text: "c" }, duration: { option: "lt2h" } };
-    expect(applyAnswer(FORM, before, "relations", { options: ["none"] })).toEqual({ relations: { options: ["none"] } });
-    expect(before.case).toEqual({ text: "c" });
+    const before: Answers = { case: { text: "c" }, duration: { option: "lt2h" }, pains: { text: "p" } };
+    expect(applyAnswer(FORM, before, "case", { option: "none" })).toEqual({ case: { option: "none" }, pains: { text: "p" } });
+    expect(before.duration).toEqual({ option: "lt2h" });
+  });
+  it("prunes sources when every activity becomes never", () => {
+    const before: Answers = { activities: { rows: { ...NEVER, competitors: "monthly" } }, sources: { options: ["website"] } };
+    expect(applyAnswer(FORM, before, "activities", { rows: NEVER })).toEqual({ activities: { rows: NEVER } });
   });
   it("cleans the value it stores", () => {
     expect(applyAnswer(FORM, {}, "followup", { options: ["neither"], email: "a@b.ch" })).toEqual({ followup: { options: ["neither"] } });
@@ -158,25 +188,22 @@ describe("applyAnswer", () => {
 });
 
 describe("questionAfter", () => {
-  const all: Answers = {
-    role: { option: "owner" }, size: { option: "1-9" }, relations: { options: ["customer"] }, case: { text: "c" },
-    duration: { option: "lt2h" }, pains: { text: "p" }, gains: { text: "g" }, followup: { options: ["neither"] },
-  };
   it("walks forward in order, even over answered questions", () => {
-    expect(questionAfter(FORM, all, "size")?.id).toBe("relations");
+    expect(questionAfter(FORM, FULL, "size")?.id).toBe("customers");
   });
   it("jumps over skipped questions", () => {
-    expect(questionAfter(FORM, { relations: { options: ["none"] } }, "relations")?.id).toBe("pains");
+    expect(questionAfter(FORM, { case: { option: "none" } }, "case")?.id).toBe("pains");
+    expect(questionAfter(FORM, { activities: { rows: NEVER } }, "skipped")?.id).toBe("followup");
   });
   it("returns null after the last active question", () => {
-    expect(questionAfter(FORM, all, "followup")).toBeNull();
+    expect(questionAfter(FORM, FULL, "followup")).toBeNull();
   });
 });
 
 describe("questionNumber", () => {
   it("numbers active questions from one", () => {
     expect(questionNumber(FORM, {}, "role")).toBe(1);
-    expect(questionNumber(FORM, { relations: { options: ["none"] } }, "pains")).toBe(4);
+    expect(questionNumber(FORM, { case: { option: "none" } }, "pains")).toBe(5);
   });
 });
 
