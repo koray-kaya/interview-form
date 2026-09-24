@@ -85,6 +85,8 @@ days, and writes a private JSON export to Vercel Blob.
    set it to `false` for Production.
 2. Deployments → the current production deployment → Redeploy. Takes a few
    minutes; the form keeps working and simply asks no follow-ups.
+   Wait a minute after the redeploy before testing: for a few seconds
+   requests can still reach the previous deployment (seen on 2026-09-24).
 3. Switch on again the same way with `true`.
 
 **3. Delete a participant by reference code** (the eight characters on their
@@ -99,8 +101,9 @@ thank-you screen are the start of the response id).
    `data/export-*` files taken before the deletion too.
 
 **4. Check the budget and the spend.**
-1. Vercel → AI Gateway → Budgets: the project's monthly limit (10 USD) and the
-   alerts at 50, 75 and 100 %.
+1. `vercel ai-gateway budgets list` (or Vercel → AI Gateway → Budgets): the
+   project's monthly limit (10 USD) and what is spent. The alerts at 50, 75
+   and 100 % are set in the dashboard; the CLI has no option for them.
 2. When the budget is used up the gateway answers 402; `probe_calls` logs
    `error_class = budget`, and participants get the form without follow-ups.
 
