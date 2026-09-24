@@ -41,9 +41,9 @@ npm run export       # all rows to data/export-YYYY-MM-DD.json, and the analysis
                      # table (one row per completed response) to .csv (gitignored)
 ```
 
-The AI follow-up is off unless `PROBE_ENABLED=true`, and it only runs for a
-link whose `?c=` is a well-formed Swiss company number — that gate is what
-keeps the cost down. The prompts are measured against thirty-six invented answers:
+The AI follow-up is off unless `PROBE_ENABLED=true`; then it runs for every
+response except the smoke test's, and the AI Gateway's monthly budget caps
+the cost. The prompts are measured against thirty-six invented answers:
 
 ```bash
 RUN_LLM_EVALS=1 npm run evals   # calls the real model; needs a gateway key
@@ -115,7 +115,16 @@ activity; the daily job's read is meant to prevent that.
 3. If it happens during fieldwork, move the project to the Pro plan for the
    fieldwork window.
 
-**6. Decommission after the thesis is submitted.**
+**6. Make an invitation link, see the numbers.**
+1. Open `/admin` on the production URL; the browser asks for a password (any
+   user name, the password is the `ADMIN_PASSWORD` environment variable).
+2. Paste a company number (UID) and press Create links, or press Personal
+   link for someone without one; copy the German or English link. Note who
+   gets a personal code: the answers carry the code, not a name.
+3. The same page shows how many responses are completed, in progress, and
+   from which kind of link. It never shows answer text.
+
+**7. Decommission after the thesis is submitted.**
 1. Final export (procedure 1), stored where the ethics approval says.
 2. Delete the Blob store, the Supabase project and the Vercel project; remove
    the AI Gateway budget.

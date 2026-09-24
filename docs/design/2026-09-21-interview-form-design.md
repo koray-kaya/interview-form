@@ -156,7 +156,7 @@ beside the question with a small arrow; up/down buttons bottom right.
 create table responses (
   id            uuid primary key default gen_random_uuid(),
   company_uid   text,                      -- from ?c=, stored as given, never validated for identity
-  probe_allowed boolean not null default false,  -- true when company_uid is a well-formed UID (check digit)
+  probe_allowed boolean not null default false,  -- true for every response except the smoke test's (since 2026-09-24; was: valid UID)
   lang          text not null check (lang in ('de','en')),
   form_version  text not null,
   consented_at  timestamptz not null,
@@ -214,7 +214,7 @@ bearer for that response.
 
 | Route | Body | Returns | Notes |
 |---|---|---|---|
-| `POST /api/responses` | `{ c?: string, lang, consent: true }` | `{ id, probeAllowed }` | `probe_allowed` = UID well-formed with valid check digit |
+| `POST /api/responses` | `{ c?: string, lang, consent: true }` | `{ id, probeAllowed }` | `probe_allowed` = true unless the tag is `SMOKE` (since 2026-09-24) |
 | `GET /api/responses/:id` | — | `{ lang, formVersion, answered: [{questionId, followupIndex, questionText, value}], completed }` | for resume |
 | `POST /api/responses/:id/answers` | `{ questionId, followupIndex, value, lang? }` | `{ followUp: { index, text } \| null }` | upsert on the unique key; refuses if not consented or completed; validates against the form; calls the probe when allowed. `lang` is the language on screen when the answer was given: the stored question text is taken from the form in that language, and a change is written to `responses.lang`, which therefore means "last used" |
 | `POST /api/responses/:id/complete` | — | `{ referenceCode }` | sets `completed_at`; first 8 hex characters of the id |
@@ -333,10 +333,16 @@ Worst case per participant 6 calls ≈ 0.02 USD.
   projects no longer expose `public` tables to the Data API by default).
 - The server key is a secret key (`sb_secret_…`); the legacy JWT
   `service_role` key stops working at the end of 2026.
-- Probing requires a well-formed UID with a valid check digit (weights
-  5 4 3 2 7 6 5 4, mod 11 — ported from company-reach `tools/uid.py`). A
-  stripped or forged tag yields the fixed questions only. This is not
-  authentication; it is a cost gate.
+- Until 2026-09-24 probing required a well-formed UID with a valid check
+  digit, as a cost gate. Koray dropped the gate: invitations also go to
+  people without a company number (a personal code `P-XXXXXX` from the admin
+  page), and the AI Gateway budget (10 USD/month) caps what abuse could
+  cost. Every response except the smoke test's is probed; the check digit
+  (weights 5 4 3 2 7 6 5 4, mod 11) now only warns on the admin page.
+- The admin page `/admin` sits behind HTTP Basic auth in `src/proxy.ts`
+  (`ADMIN_PASSWORD`, 12 characters or more; without it the page stays shut),
+  is `noindex` and `no-store`, and shows counts only — no answer text, no
+  company number.
 - One Vercel firewall rate-limit rule: `/api` prefix, 120 requests per 10
   minutes per IP (fixed window; a whole form is about 25 requests). Raised
   from 60 on 2026-09-24: a test of the rule locked Koray's own network out for
