@@ -10,6 +10,7 @@ vi.mock("@/db", () => ({
   countProbeCalls: vi.fn(async () => 0),
   logProbeCall: vi.fn(async () => {}),
   askedFollowUps: vi.fn(async () => []),
+  deleteFollowUps: vi.fn(async () => {}),
 }));
 vi.mock("@/probe", () => ({ runProbe: vi.fn() }));
 import * as db from "@/db";
@@ -209,6 +210,58 @@ describe("POST /api/responses/:id/answers — the probe", () => {
     expect(input.lang).toBe("en");
     expect(input.transcript[0].answer).toBe("We looked into a new supplier.");
   });
+  it("never asks the model about an escaped case, and stores the escape with the question text", async () => {
+    probeable();
+    decides();
+    const response = await answer({ questionId: "case", followupIndex: 0, value: { option: "none" } });
+    expect(await response.json()).toEqual({ followUp: null });
+    expect(probe.runProbe).not.toHaveBeenCalled();
+    expect(db.logProbeCall).not.toHaveBeenCalled();
+    expect(vi.mocked(db.saveAnswer).mock.calls[0][0]).toMatchObject({
+      questionId: "case",
+      value: { option: "none" },
+      questionText: "Think of the last time you needed to find out something about other companies. What did you need to know, and how did you go about it?",
+    });
+  });
+
+  it("deletes the case's follow-up answers when the case is escaped after all", async () => {
+    probeable([
+      row("case", { text: "We looked into a supplier." }),
+      { question_id: "case", followup_index: 1, question_text: "Where did you look?", value: { text: "Their website." } },
+    ]);
+    await answer({ questionId: "case", followupIndex: 0, value: { option: "none" } });
+    expect(db.deleteFollowUps).toHaveBeenCalledWith(ID, "case");
+  });
+
+  it("keeps the follow-up answers when a written case is only edited", async () => {
+    probeable([row("case", { text: "We looked into a supplier." })]);
+    decides({ decision: "stop", followUp: undefined });
+    await answer({ questionId: "case", followupIndex: 0, value: { text: "We looked into a supplier in Ticino." } });
+    expect(db.deleteFollowUps).not.toHaveBeenCalled();
+  });
+
+  it("gives pains no case as context when the case was escaped", async () => {
+    probeable([row("case", { option: "none" })]);
+    decides({ decision: "stop", followUp: undefined });
+    await answer({ questionId: "pains", followupIndex: 0, value: { text: "Everything takes long." } });
+    expect(vi.mocked(probe.runProbe).mock.calls[0][0].context).toEqual([]);
+  });
+
+  it("refuses a follow-up answer on a question the escape now skips", async () => {
+    probeable([row("case", { option: "none" })]);
+    vi.mocked(db.askedFollowUps).mockResolvedValue([{ question_id: "gains", followup_index: 1, followup_text: "What would that have changed?" }]);
+    const response = await answer({ questionId: "gains", followupIndex: 1, value: { text: "We would have declined." } });
+    expect(response.status).toBe(400);
+    expect(db.saveAnswer).not.toHaveBeenCalled();
+  });
+
+  it("refuses the escape as the answer to a follow-up", async () => {
+    probeable([row("case", { text: "We looked into a supplier." })]);
+    vi.mocked(db.askedFollowUps).mockResolvedValue([{ question_id: "case", followup_index: 1, followup_text: "Where did you look?" }]);
+    const response = await answer({ questionId: "case", followupIndex: 1, value: { option: "none" } });
+    expect(response.status).toBe(400);
+    expect(db.saveAnswer).not.toHaveBeenCalled();
+  });
 });
 
 describe("POST /api/responses/:id/answers", () => {
@@ -235,6 +288,19 @@ describe("POST /api/responses/:id/answers", () => {
     expect(db.setLang).toHaveBeenCalledWith(ID, "en");
   });
 
+  it("leaves the language alone when the answer is refused", async () => {
+    stored([], { lang: "de" });
+    const response = await answer({ questionId: "case", followupIndex: 0, value: { text: "   " }, lang: "en" });
+    expect(response.status).toBe(400);
+    expect(db.setLang).not.toHaveBeenCalled();
+  });
+
+  it("refuses an option the question does not offer", async () => {
+    stored([]);
+    expect((await answer({ questionId: "role", followupIndex: 0, value: { option: "ceo" } })).status).toBe(400);
+    expect(db.saveAnswer).not.toHaveBeenCalled();
+  });
+
   it("leaves the response alone when the language did not change", async () => {
     stored([], { lang: "de" });
     await answer({ questionId: "role", followupIndex: 0, value: { option: "sales" }, lang: "de" });
@@ -255,10 +321,13 @@ describe("POST /api/responses/:id/answers", () => {
     expect(db.saveAnswer).not.toHaveBeenCalled();
   });
 
-  it("prunes case and duration when relations becomes none", async () => {
-    stored([row("relations", { options: ["customer"] }), row("case", { text: "c" }), row("duration", { option: "lt2h" })]);
-    await answer({ questionId: "relations", followupIndex: 0, value: { options: ["none"] } });
-    expect(vi.mocked(db.saveAnswer).mock.calls[0][0].pruned).toEqual(["case", "duration"]);
+  it("prunes duration, cost, result and gains when the case is escaped", async () => {
+    stored([
+      row("case", { text: "c" }), row("duration", { option: "lt2h" }), row("cost", { options: ["no"] }),
+      row("result", { option: "yes" }), row("pains", { text: "p" }), row("gains", { text: "g" }),
+    ]);
+    await answer({ questionId: "case", followupIndex: 0, value: { option: "none" } });
+    expect(vi.mocked(db.saveAnswer).mock.calls[0][0].pruned).toEqual(["duration", "cost", "result", "gains"]);
   });
 
   it("does not store an e-mail the participant opted out of", async () => {
@@ -275,10 +344,10 @@ describe("POST /api/responses/:id/answers", () => {
     expect(db.saveAnswer).not.toHaveBeenCalled();
   });
 
-  it("refuses an unknown question, a skipped question and a follow-up index before M3", async () => {
-    stored([row("relations", { options: ["none"] })]);
+  it("refuses an unknown question, a skipped question and an unasked follow-up", async () => {
+    stored([row("case", { option: "none" })]);
     expect((await answer({ questionId: "nope", followupIndex: 0, value: { text: "x" } })).status).toBe(400);
-    expect((await answer({ questionId: "case", followupIndex: 0, value: { text: "x" } })).status).toBe(400);
+    expect((await answer({ questionId: "duration", followupIndex: 0, value: { option: "lt2h" } })).status).toBe(400);
     expect((await answer({ questionId: "role", followupIndex: 1, value: { option: "sales" } })).status).toBe(400);
     expect(db.saveAnswer).not.toHaveBeenCalled();
   });
@@ -296,5 +365,32 @@ describe("POST /api/responses/:id/answers", () => {
     stored([]);
     vi.mocked(db.saveAnswer).mockResolvedValueOnce(false);
     expect((await answer({ questionId: "role", followupIndex: 0, value: { option: "sales" } })).status).toBe(409);
+  });
+
+  const ROWS = { "new-customers": "never", "new-suppliers": "1-2", "one-company": "3-6", competitors: "monthly", "own-position": "weekly" };
+
+  it("stores a rows answer with the stem as its question text", async () => {
+    stored([]);
+    expect((await answer({ questionId: "activities", followupIndex: 0, value: { rows: ROWS } })).status).toBe(200);
+    expect(vi.mocked(db.saveAnswer).mock.calls[0][0]).toMatchObject({
+      questionText: "How often did this happen in the last 12 months?",
+      value: { rows: ROWS },
+    });
+  });
+
+  it("refuses a rows answer with a row missing or a point the scale lacks", async () => {
+    stored([]);
+    const four = Object.fromEntries(Object.entries(ROWS).filter(([id]) => id !== "competitors"));
+    expect((await answer({ questionId: "activities", followupIndex: 0, value: { rows: four } })).status).toBe(400);
+    expect((await answer({ questionId: "activities", followupIndex: 0, value: { rows: { ...ROWS, competitors: "daily" } } })).status).toBe(400);
+    expect((await answer({ questionId: "case", followupIndex: 0, value: { rows: ROWS } })).status).toBe(400);
+    expect(db.saveAnswer).not.toHaveBeenCalled();
+  });
+
+  it("writes nothing when the same rows arrive with their keys in another order", async () => {
+    const reordered = Object.fromEntries(Object.entries(ROWS).reverse());
+    stored([row("activities", { rows: reordered })]);
+    expect((await answer({ questionId: "activities", followupIndex: 0, value: { rows: ROWS } })).status).toBe(200);
+    expect(db.saveAnswer).not.toHaveBeenCalled();
   });
 });

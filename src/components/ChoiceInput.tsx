@@ -1,30 +1,31 @@
 "use client";
 // A list of options rendered as buttons with key hints (A, B, C …), like
 // Typeform: a chosen option fills its key badge, shows a tick and blinks. Single choice replaces the selection; multi choice toggles; an
-// "exclusive" option (none of these / neither) clears the others. Plain React
+// "exclusive" option (none of these / neither / I don't know) clears the others. Plain React
 // state lifted to the parent through onChange.
 import { useEffect } from "react";
 import type { Option } from "@/form";
 import { t, type Lang } from "@/i18n";
 import { Check } from "@/components/icons";
 
-const KEYS = "ABCDEFGHIJ";
+export const KEYS = "ABCDEFGHIJKL";
 
 type Props = {
   options: Option[];
   lang: Lang;
   multiple: boolean;
-  exclusive?: string;
+  /** Options that stand alone: "none of these", "neither", "I don't know". */
+  exclusive?: string[];
   selected: string[];
   onChange: (ids: string[]) => void;
 };
 
-export function ChoiceInput({ options, lang, multiple, exclusive, selected, onChange }: Props) {
+export function ChoiceInput({ options, lang, multiple, exclusive = [], selected, onChange }: Props) {
   function toggle(id: string) {
     if (!multiple) return onChange([id]);
     if (selected.includes(id)) return onChange(selected.filter((x) => x !== id));
-    if (id === exclusive) return onChange([id]);
-    onChange([...selected.filter((x) => x !== exclusive), id]);
+    if (exclusive.includes(id)) return onChange([id]);
+    onChange([...selected.filter((x) => !exclusive.includes(x)), id]);
   }
 
   useEffect(() => {

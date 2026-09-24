@@ -1,6 +1,6 @@
 // GET /api/cron/daily — run by Vercel Cron once a day (vercel.json). Keeps the
 // Supabase project awake, deletes responses left unfinished for more than
-// seven days (the consent text promises this), and writes a private JSON
+// seven days (design §7), and writes a private JSON
 // export to Vercel Blob when a Blob token is configured. Only a caller with
 // CRON_SECRET may run it.
 import { timingSafeEqual } from "node:crypto";

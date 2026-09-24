@@ -152,7 +152,7 @@ describe("runProbe", () => {
     const sent: unknown[] = [];
     await runProbe(input, { model: modelReturning(answered({}), sent) });
     const prompt = JSON.stringify(sent[0]);
-    expect(prompt).toContain("The researcher needs");
+    expect(prompt).toContain("The analysis needs two things from this answer");
     expect(prompt).toContain("We looked into a new supplier.");
   });
 

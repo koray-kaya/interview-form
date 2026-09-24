@@ -50,6 +50,7 @@ Five milestones. Each one ends with something Koray can run.
 | M1 | **Skeleton and form engine** | Next.js project, `src/form.ts` with every text in DE and EN, pure `src/engine.ts` with tests, the eight screens with the theme, answers in memory, resume via localStorage | `npm run dev` — fill the form in both languages on a phone-sized window | Next.js App Router · React state and components · TypeScript unions as data · Tailwind + CSS variables · Vitest |
 | M2 | **Storage** | Supabase project (Zurich), `supabase/migrations/`, route handlers, upsert on the unique key, consent gate, resume from server, reference code, `npm run export`, daily cron with Blob export and 7-day cleanup | fill the form → rows in Supabase; `npm run export` writes `data/…json`; cron route works locally with the secret | route handlers · service-role vs anon · RLS · migrations · idempotent writes · Vercel cron |
 | M3 | **The probe** | `prompts/probe-<id>.md` (one per question), `src/probe.ts` (schema, post-check, deadline, fallback), `probe_calls`, UID check digit, `PROBE_ENABLED`, prompt evals | a thin answer gets a follow-up, a detailed one does not; `RUN_LLM_EVALS=1 npm run evals` green with the spread printed | AI SDK `generateText` + `Output.object` · AI Gateway OIDC · Zod · AbortSignal · what a prompt eval is · reading `probe_calls` |
+| M3.5 | **Form 2.0** | fourteen questions (`src/form.ts` 2.0.0), the rows question type, the escape on `case`, two skip rules, the new welcome screen, version-2 probe prompts and their evals | both paths (case told, case escaped) in both languages on a phone | discriminated unions as data · jsonb key order · eval fixtures as a specification |
 | M4 | **Deploy and harden** | Vercel project in `fra1`, env vars, budget + alerts, WAF rate-limit rule, `noindex`, Playwright smoke test, final consent text, README § Operations | production URL end to end on a phone; budget visible in the dashboard; smoke test green in CI | `vercel.json` · env and OIDC · WAF · Playwright · a runbook |
 | M5 | **Pilot** | 2–3 pilot runs, metrics (time, follow-ups, latency p95), hand review of every generated question, decision on `maxFollowUps`, Supabase pause check across ≥ 8 idle days, pilot report | the report, attached to the thesis issue | reading the data you designed for · deciding from a small sample |
 
@@ -66,6 +67,9 @@ Five milestones. Each one ends with something Koray can run.
   URL-bearing output (test); timeout and 402 leave the form working (test);
   evals: every fixture's expected decision met in both trials, no fixture
   yields a recommendation.
+- **M3.5:** every screen renders in both languages; the escape and both skip
+  rules work; evals green in both trials with follow-ups in the answer's
+  language; the export of a full run reproduces the fourteen answers.
 - **M4:** deployment summary shows `fra1`; the WAF rule and the budget exist;
   the smoke test passes against production with probing disabled; the
   runbook's five procedures were each tried once.

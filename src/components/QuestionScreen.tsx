@@ -1,14 +1,15 @@
 "use client";
 // One question on one screen: number, title, helper line, the right input for
-// the question type, the validation error, OK, and the up/down buttons in the
+// the question type (text, choices, or rows), the validation error, OK, and the up/down buttons in the
 // corner. Holds the draft answer locally; hands a valid AnswerValue up through
 // onSubmit. Slides in from below, or from above after Back.
 import { useEffect, useState } from "react";
 import type { Question } from "@/form";
-import { cleanAnswer, validate, wantsEmail, type AnswerValue } from "@/engine";
+import { cleanAnswer, isEscape, validate, wantsEmail, type AnswerValue } from "@/engine";
 import { t, type Lang } from "@/i18n";
 import { UI } from "@/texts";
 import { ChoiceInput } from "@/components/ChoiceInput";
+import { RowsInput } from "@/components/RowsInput";
 import { TextInput } from "@/components/TextInput";
 import { ArrowRight, Check, ChevronDown, ChevronUp } from "@/components/icons";
 
@@ -42,12 +43,14 @@ export function QuestionScreen({
   // a follow-up starts from an empty box; the earlier answer is shown above it
   const [text, setText] = useState(!asking && initial && "text" in initial ? initial.text : "");
   const [selected, setSelected] = useState<string[]>(initialSelected(initial));
+  const [rows, setRows] = useState<Record<string, string>>(initial && "rows" in initial ? initial.rows : {});
   const [email, setEmail] = useState(initial && "email" in initial ? (initial.email ?? "") : "");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   function draft(): AnswerValue {
     if (question.type === "open") return { text: text.trim() };
+    if (question.type === "rows") return { rows };
     if (question.type === "single") return selected.length ? { option: selected[0] } : { options: [] };
     // cleanAnswer drops an e-mail the chosen options do not need
     return cleanAnswer(question, { options: selected, email });
@@ -60,6 +63,17 @@ export function QuestionScreen({
     const problem = validate(question, value, lang);
     setError(problem);
     if (problem) return;
+    await send(value);
+  }
+
+  // The one-tap way out of an open question. Whatever is in the box is not sent.
+  async function escape(id: string) {
+    if (busy) return;
+    setError(null);
+    await send({ option: id });
+  }
+
+  async function send(value: AnswerValue) {
     setBusy(true);
     const serverProblem = asking && onFollowUp ? await onFollowUp(value) : await onSubmit(value);
     // on success the next screen replaces this one; these updates then do nothing
@@ -68,6 +82,8 @@ export function QuestionScreen({
   }
 
   const showEmail = wantsEmail(question, selected);
+  // a const keeps the narrowing inside the click handler below
+  const way = question.type === "open" && !asking ? question.escape : undefined;
 
   // Enter submits a choice question from anywhere on the page. Text areas and
   // the e-mail field handle Enter themselves. preventDefault stops the focused
@@ -118,6 +134,8 @@ export function QuestionScreen({
 
           {question.type === "open" ? (
             <TextInput value={text} maxChars={question.maxChars} lang={lang} onChange={setText} onSubmit={submit} />
+          ) : question.type === "rows" ? (
+            <RowsInput rows={question.rows} scale={question.scale} lang={lang} value={rows} onChange={setRows} />
           ) : (
             <ChoiceInput
               options={question.options}
@@ -127,6 +145,17 @@ export function QuestionScreen({
               selected={selected}
               onChange={setSelected}
             />
+          )}
+
+          {way && (
+            <button
+              type="button"
+              onClick={() => escape(way.id)}
+              aria-pressed={isEscape(question, initial)}
+              className="self-start text-base text-accent/80 underline decoration-accent/30 underline-offset-4 transition hover:text-accent aria-pressed:font-medium aria-pressed:text-accent"
+            >
+              {t(way.label, lang)}
+            </button>
           )}
 
           {showEmail && question.type === "multi" && question.email && (

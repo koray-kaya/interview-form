@@ -1,7 +1,7 @@
 # interview-form
 
 A short online form for a master's thesis on how Swiss firms look into
-other companies. Eight screens, one question per screen, German or English.
+other companies. Fourteen screens, one question per screen, German or English.
 Three open questions get up to two AI follow-up questions each, asked only
 when the answer leaves out something the question needs, under a rule that is
 written down. Answers go to a database in Zurich. Built because Typeform's AI
@@ -49,7 +49,10 @@ Decided (2026-09-21), details in the design doc:
   (gitignored). Free-text answers can name people; never in git, never in
   examples; eval fixtures use fictional companies.
 - Secrets only in `.env.local` and Vercel environment variables (gitignored).
-- Nothing a participant sees names a product or shows a logo.
+- Nothing a participant sees names the form's own processors (the AI,
+  hosting or database providers) or shows a logo. The `sources` screen names
+  Zefix, LinkedIn and ChatGPT as examples of sources; that is a design
+  decision (2026-09-24), not a breach.
 - The consent text promises only what the tiers deliver. Do not add claims.
 - main via short-lived branch → PR → review → merge.
 - Per-developer notes go in `CLAUDE.local.md` (gitignored).

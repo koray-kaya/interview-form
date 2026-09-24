@@ -43,62 +43,11 @@ and it needs the rule that produced every question to be written down.
 
 ## 3. The form
 
-Version `1.0.0`. German is the default language and the text most participants
-see; English is the second option. Both live in `form.ts`. The German text is
-Koray's draft and is checked by a native speaker before the pilot. `Sie`
-throughout.
-
-**Welcome + consent (one screen).**
-
-> **How Swiss firms look into other companies**
-> I am a master's student in Switzerland. My thesis asks how Swiss firms find
-> out about other companies — a possible customer, a supplier, a competitor —
-> and what that costs them today. 8 short questions, about 6 minutes. There are
-> no right answers; I am interested in how you actually work.
->
-> This link is specific to your company. I use that only to avoid inviting you
-> twice and to reach you if you ask me to. Results are reported without
-> company names. Three of your written answers may receive one or two short
-> follow-up questions written by an AI service (Anthropic, via Vercel); those
-> answers are not used to train models. Data is stored in Switzerland
-> (Supabase, Zurich). You can stop at any time; unfinished answers are deleted.
->
-> ☐ I have read this and agree to take part. → **Start**
-
-| # | id | Type | Question (EN) | Frage (DE, draft) |
-|---|---|---|---|---|
-| 1 | `role` | single choice | Your role — Owner or managing director · Sales · Purchasing · Other | Ihre Rolle — Inhaber/in oder Geschäftsführung · Verkauf · Einkauf · Andere |
-| 2 | `size` | single choice | How many people work at your company? — 1–9 · 10–49 · 50–99 · 100–249 · 250 or more | Wie viele Personen arbeiten in Ihrem Unternehmen? — 1–9 · 10–49 · 50–99 · 100–249 · 250 oder mehr |
-| 3 | `relations` | multi choice | In the last 12 months, did you look into another company because you needed… — a new customer · a new supplier · to know a competitor · to see where your own company stands · none of these | Haben Sie sich in den letzten 12 Monaten über ein anderes Unternehmen informiert, weil Sie… — einen neuen Kunden suchten · einen neuen Lieferanten suchten · einen Mitbewerber kennen wollten · wissen wollten, wo Ihr eigenes Unternehmen steht · nichts davon |
-| 4 | `case` | open, probe ≤ 2 | Think of the most recent case. What did you need to find out, and how did you go about it? | Denken Sie an den letzten Fall. Was mussten Sie herausfinden, und wie sind Sie vorgegangen? |
-| 5 | `duration` | single choice | Roughly how long did that take in total? — Under 30 minutes · Up to 2 hours · About half a day · A day or more · Spread over weeks | Wie lange hat das insgesamt etwa gedauert? — Unter 30 Minuten · Bis 2 Stunden · Etwa einen halben Tag · Einen Tag oder mehr · Über Wochen verteilt |
-| 6 | `pains` | open, probe ≤ 2 | When you look into other companies, where does it get stuck, take longer than it should, or make you give up? A concrete example helps most. | Wenn Sie sich über andere Unternehmen informieren: Wo hakt es, wo dauert es länger als nötig, wo geben Sie auf? Ein konkretes Beispiel hilft am meisten. |
-| 7 | `gains` | open, probe ≤ 2 | Looking back at that case: what would a really good result have looked like, and what would it have changed for you? | Rückblickend auf diesen Fall: Wie hätte ein wirklich gutes Ergebnis ausgesehen, und was hätte es für Sie verändert? |
-| 8 | `followup` | multi choice + email | Would you be open to… — a 20-minute conversation · trying a tool in this area later in the project · neither. *E-mail field appears when either is chosen.* | Wären Sie offen für… — ein 20-minütiges Gespräch · einen Test eines Werkzeugs in diesem Bereich später im Projekt · weder noch |
-
-Rules:
-
-- `relations` = "none of these" skips `case` and `duration`. "None of these"
-  is exclusive: choosing it clears the other options and vice versa.
-- Every open question is required; `followup` is required; e-mail is required
-  only when an option other than "neither" is chosen.
-- Answers are capped at 4,000 characters.
-
-**Probe criteria** (what the model checks for; the participant never sees
-these). Each probed question has its own prompt, `prompts/probe-<id>.md`,
-which states the element, when it counts as present, and illustrative
-decisions; the prompt files are the source and the thesis prints them.
-
-| Question | Missing element | Context given to the model |
-|---|---|---|
-| `case` | the steps taken and the sources used | this question's transcript |
-| `pains` | a concrete example (a situation, not a generality) | this question's transcript + the `case` transcript |
-| `gains` | why the result would matter — what decision or action it would change | this question's transcript + the `case` transcript |
-
-**Thank-you screen.** "Thank you — your answers are saved. Reference code
-`ab12cd34`. If you want your answers removed, send this code to
-&lt;contact address&gt;." Plus, when a conversation was accepted: "I will be
-in touch by e-mail."
+Replaced by form 2.0 (M3.5, issue #15). `docs/design/2026-09-23-form-2.0.md`
+holds the fourteen screens in German and English, the rules and the
+reasoning; `src/form.ts` is the source of truth. Form 1.0 (eight screens) is
+in the git history of this section and of `form.ts`, and its answers carry
+`form_version = "1.0.0"`.
 
 ## 4. Architecture
 
@@ -131,22 +80,30 @@ checked before the call; a `stop` decision consumes a call.
 ## 5. Form definition (`src/form.ts`)
 
 ```ts
-export const FORM_VERSION = "1.0.0";
+export const FORM_VERSION = "2.0.0";
 
 type Lang = "de" | "en";
 type Text = Record<Lang, string>;
+type Option = { id: string; label: Text };
 
 type Question =
-  | { id: string; type: "single"; text: Text; options: { id: string; label: Text }[]; required: true }
-  | { id: string; type: "multi";  text: Text; options: { id: string; label: Text }[]; required: true;
-      email?: { unlessOption: string; label: Text } }
-  | { id: string; type: "open";   text: Text; required: true; maxChars: 4000;
-      probe?: { maxFollowUps: 2; missing: Text; context?: string[] } };
+  | { id: string; type: "single"; text: Text; help?: Text; options: Option[] }
+  | { id: string; type: "multi";  text: Text; help?: Text; options: Option[];
+      exclusive?: string[]; email?: { unlessOption: string; label: Text } }
+  | { id: string; type: "open";   text: Text; help?: Text; maxChars: 4000;
+      escape?: Option; probe?: { maxFollowUps: 2; context?: string[] } }
+  | { id: string; type: "rows";   text: Text; help?: Text; rows: Option[]; scale: Option[] };
 
-export const FORM: { version: string; questions: Question[]; skips: Skip[] } = …;
+type Skip = {
+  when: { question: string; is: string } | { question: string; every: string };
+  skip: string[];
+};
 ```
 
-`skips`: `{ when: { question: "relations", is: "none" }, skip: ["case", "duration"] }`.
+Answers are `{ text }`, `{ option }` (also the escape on an open question),
+`{ options, email? }` or `{ rows: { [rowId]: scaleId } }`. `skips`: `case`
+escaped (`is: "none"`) skips `duration`, `cost`, `result`, `gains`; every
+`activities` row `never` (`every: "never"`) skips `sources`.
 
 The engine (`src/engine.ts`) is pure: `nextScreen(form, answers)` returns the
 next unanswered screen honouring skips, `validate(question, value)` returns
@@ -266,8 +223,9 @@ bearer for that response.
 Client retries any `POST` once on network failure; the upsert makes that
 safe. A second `POST /api/responses` from the same browser is prevented by
 the stored id. A response can be resumed for 7 days; the daily cron deletes
-responses with `completed_at is null` older than that, which is the promise
-the consent text makes ("unfinished answers are deleted").
+responses with `completed_at is null` older than that. Form 1.0's consent
+text promised this ("unfinished answers are deleted"); the form 2.0 welcome
+text no longer mentions it, and the deletion stays.
 
 **One rule for what an answer set contains** (added 2026-09-22, M1). The
 browser and the server call the same pure function, `applyAnswer` in
@@ -395,7 +353,11 @@ Worst case per participant 6 calls ≈ 0.02 USD.
   fallback is Supabase Pro for the fieldwork window — and writes
   `responses`, `answers`, `probe_calls` as one JSON file to Vercel Blob
   (`exports/YYYY-MM-DD.json`).
-- `npm run export` writes the same JSON to `data/` locally.
+- `npm run export` writes the same JSON to `data/` locally, and beside it a
+  CSV for analysis (`src/csv.ts`): one row per completed response of the
+  current form version, one column per single choice, per option (1/0), per
+  `activities` row and per follow-up; an empty cell is a question the
+  participant's path skipped. The e-mail address is left out.
 - Latency target: p95 ≤ 6 s from answer submit to follow-up shown; measured
   from `probe_calls.latency_ms` in the pilot.
 - Runbook (`README.md` § Operations): export; disable probing; delete a
@@ -517,10 +479,11 @@ net working — update them deliberately, and read what each one was protecting.
 **What fails silently.** These hold facts about the form in prose, and nothing
 checks them against `form.ts`:
 
-- The intro text (`texts.ts`, `UI.intro`) promises "8 short questions, about 6
-  minutes". Change the count and the consent text is false.
-- The privacy text (`UI.privacy`) promises "three of your written answers may
-  receive one or two short follow-up questions". Change how many questions are
+- The welcome text (`texts.ts`, `UI.howLong`) promises "14 short questions,
+  about 10 minutes". `tests/components/Welcome.test.tsx` holds the count to
+  the form; nothing holds the minutes or "three to write".
+- The welcome text (`UI.promise`) promises "three of your written answers may
+  get a short follow-up question". Change how many questions are
   probed, or `maxFollowUps`, and the same applies. Both sentences are part of
   what the participant consented to, so this is an ethics question before it
   is a copy question.
@@ -543,5 +506,5 @@ which is worse, because nothing says so.
 **The order to work in.** Edit `form.ts`; bump `FORM_VERSION`; update the
 prompt files and eval fixtures for any probed question that changed; run
 `npm test` and fix what went red, reading each failure rather than repairing
-it; re-read `UI.intro`, `UI.privacy` and `UI.tooLong` against the new form;
+it; re-read `UI.howLong`, `UI.promise`, `UI.details` and `UI.tooLong` against the new form;
 update section 3 here; run the evals if a probe criterion moved.

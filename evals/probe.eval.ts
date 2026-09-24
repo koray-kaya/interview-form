@@ -19,6 +19,7 @@ import { FORM, type OpenQuestion } from "@/form";
 import { t } from "@/i18n";
 import { DEADLINE_MS as DEFAULT_DEADLINE_MS, DEFAULT_REASONING, runProbe, type ProbeResult, type Reasoning } from "@/probe";
 import { FIXTURES, type Fixture } from "./fixtures";
+import { languageOf } from "./language";
 
 const TRIALS = 2;
 const REASONING = (process.env.PROBE_REASONING as Reasoning) || DEFAULT_REASONING;
@@ -86,9 +87,10 @@ function writeReport(): void {
   ];
 
   const body = trials.map((row) => {
-    const head = `**${row.fixture.question} · ${row.fixture.id} (${row.fixture.lang})** — expected ${row.fixture.expect}, trial ${row.trial}`;
+    const langs = row.fixture.answerLang ? `${row.fixture.lang}, answer ${row.fixture.answerLang}` : row.fixture.lang;
+    const head = `**${row.fixture.question} · ${row.fixture.id} (${langs})** — expected ${row.fixture.expect}, trial ${row.trial}`;
     const got = `- ${outcome(row.result)} in ${row.result.latencyMs} ms`;
-    const wrote = row.result.followUp ? `- > ${row.result.followUp}` : null;
+    const wrote = row.result.followUp ? `- > ${row.result.followUp} _(${languageOf(row.result.followUp)})_` : null;
     const why = row.result.reason ? `- _${row.result.reason}_` : null;
     return [head, got, wrote, why].filter(Boolean).join("\n");
   });
@@ -129,6 +131,14 @@ describe.skipIf(!enabled)("probe prompts against the golden answers", () => {
         // the decision must hold in both trials, not on average
         for (const result of results) {
           expect(result.decision, `${fixture.id}: ${fixture.why}`).toBe(fixture.expect);
+        }
+
+        // the follow-up is in the language the person wrote in (prompt §Language)
+        const expectedLang = fixture.answerLang ?? fixture.lang;
+        for (const result of results) {
+          if (result.decision === "ask") {
+            expect(languageOf(result.followUp ?? ""), `${fixture.id}: ${result.followUp}`).toBe(expectedLang);
+          }
         }
 
         // a follow-up may never put a product in the participant's mouth
