@@ -74,6 +74,32 @@ describe("Form", () => {
     expect(fakeApi.postAnswer).toHaveBeenLastCalledWith(expect.any(String), "role", { option: "owner" }, "en");
   });
 
+  it("starts afresh when a finished browser opens a link with another code", async () => {
+    const { FORM_VERSION } = await import("@/form");
+    const done = { version: FORM_VERSION, lang: "en", stage: "done", responseId: null, referenceCode: "0123abcd" };
+    localStorage.setItem("interview-form", JSON.stringify({ ...done, tag: "P-7K3Q9X" }));
+    render(<Form initialLang="en" companyTag="CHE-123.456.788" />);
+    expect(await screen.findByRole("button", { name: /Start/ })).toBeInTheDocument();
+    expect(screen.queryByText("Thank you")).not.toBeInTheDocument();
+  });
+
+  it("keeps the thank-you screen for the same link, and for a finish saved before codes were remembered", async () => {
+    const { FORM_VERSION } = await import("@/form");
+    const done = { version: FORM_VERSION, lang: "en", stage: "done", responseId: null, referenceCode: "0123abcd" };
+    localStorage.setItem("interview-form", JSON.stringify({ ...done, tag: "P-7K3Q9X" }));
+    const same = render(<Form initialLang="en" companyTag=" P-7K3Q9X " />);
+    expect(await screen.findByText("Thank you")).toBeInTheDocument();
+    same.unmount();
+    localStorage.setItem("interview-form", JSON.stringify(done));
+    render(<Form initialLang="en" companyTag="CHE-123.456.788" />);
+    expect(await screen.findByText("Thank you")).toBeInTheDocument();
+  });
+
+  it("remembers which link a response was started from", async () => {
+    await start("en", "P-7K3Q9X");
+    expect(JSON.parse(localStorage.getItem("interview-form")!).tag).toBe("P-7K3Q9X");
+  });
+
   it("does not offer the language toggle on the thank-you screen", async () => {
     const { FORM_VERSION } = await import("@/form");
     localStorage.setItem(

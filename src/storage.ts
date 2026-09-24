@@ -1,6 +1,7 @@
 // Mirrors where the participant is to localStorage so a refresh resumes: the
-// server's response id, the language, the stage, and, once done, the reference
-// code. Answers are never kept in the browser — the server holds them.
+// server's response id, the language, the stage, the link's code, and, once
+// done, the reference code. Answers are never kept in the browser — the
+// server holds them.
 // Browser storage can be missing, stale or edited, so every read is checked
 // with Zod and any failure means "no state".
 import { z } from "zod";
@@ -15,6 +16,8 @@ const SavedSchema = z.object({
   responseId: z.uuid().nullable(),
   referenceCode: z.string().regex(/^[0-9a-f]{8}$/).optional(),
   inTouch: z.boolean().optional(),
+  /** The link's code (?c=) this state belongs to; absent in state saved before 2026-09-24. */
+  tag: z.string().max(32).nullable().optional(),
 });
 
 export type Saved = z.infer<typeof SavedSchema>;

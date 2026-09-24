@@ -54,8 +54,17 @@ function resumeAt(answers: Answers): string | null {
 }
 
 function FormInBrowser({ initialLang, companyTag }: Props) {
-  // read localStorage once, on the first render (the function form of useState)
-  const [saved] = useState(() => loadSaved());
+  // read localStorage once. A link with another code is another invitation (a
+  // colleague on the same computer, or Koray trying links): it starts afresh.
+  const tag = companyTag?.trim() || null;
+  const [saved] = useState(() => {
+    const stored = loadSaved();
+    if (stored && stored.tag !== undefined && stored.tag !== tag) {
+      clearSaved();
+      return null;
+    }
+    return stored;
+  });
   const resuming = saved?.stage === "questions" && saved.responseId !== null;
 
   const [lang, setLang] = useState<Lang>(saved?.lang ?? initialLang);
@@ -129,8 +138,8 @@ function FormInBrowser({ initialLang, companyTag }: Props) {
 
   useEffect(() => {
     if (stage === "loading") return;
-    saveSaved({ version: FORM_VERSION, lang, stage, responseId, referenceCode, inTouch });
-  }, [lang, stage, responseId, referenceCode, inTouch]);
+    saveSaved({ version: FORM_VERSION, lang, stage, responseId, referenceCode, inTouch, tag });
+  }, [lang, stage, responseId, referenceCode, inTouch, tag]);
 
   useEffect(() => {
     document.documentElement.lang = lang;
