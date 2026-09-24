@@ -37,7 +37,8 @@ npm install
 cp .env.example .env.local   # fill in the Supabase URL and secret key
 npm run dev          # http://localhost:3000 (German; ?l=en for English)
 npm test             # offline, a few seconds
-npm run export       # all rows to data/export-YYYY-MM-DD.json (gitignored)
+npm run export       # all rows to data/export-YYYY-MM-DD.json, and the analysis
+                     # table (one row per completed response) to .csv (gitignored)
 ```
 
 The AI follow-up is off unless `PROBE_ENABLED=true`, and it only runs for a

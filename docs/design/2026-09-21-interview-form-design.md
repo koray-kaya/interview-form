@@ -353,7 +353,11 @@ Worst case per participant 6 calls ≈ 0.02 USD.
   fallback is Supabase Pro for the fieldwork window — and writes
   `responses`, `answers`, `probe_calls` as one JSON file to Vercel Blob
   (`exports/YYYY-MM-DD.json`).
-- `npm run export` writes the same JSON to `data/` locally.
+- `npm run export` writes the same JSON to `data/` locally, and beside it a
+  CSV for analysis (`src/csv.ts`): one row per completed response of the
+  current form version, one column per single choice, per option (1/0), per
+  `activities` row and per follow-up; an empty cell is a question the
+  participant's path skipped. The e-mail address is left out.
 - Latency target: p95 ≤ 6 s from answer submit to follow-up shown; measured
   from `probe_calls.latency_ms` in the pilot.
 - Runbook (`README.md` § Operations): export; disable probing; delete a
