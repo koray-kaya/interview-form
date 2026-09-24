@@ -21,7 +21,7 @@
 - Production public but `noindex`; preview deployments behind Vercel Authentication.
 - The production URL stays out of the public repository: GitHub secret `PRODUCTION_URL` (masked in Actions logs), `CLAUDE.local.md` (open point 1).
 - AI Gateway budget 10 USD/month, alerts at 50 / 75 / 100 %.
-- One firewall rate-limit rule: `/api/*`, 60 requests per 10 minutes per IP.
+- One firewall rate-limit rule: `/api/*`, 120 requests per 10 minutes per IP (raised from 60 on 2026-09-24, see design §10).
 - Nothing a participant sees names the form's own processors.
 - Commits: conventional, English, subject ≤ 60 characters, ending with the `Co-Authored-By` trailer.
 

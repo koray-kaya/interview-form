@@ -13,6 +13,9 @@ import { RowsInput } from "@/components/RowsInput";
 import { TextInput } from "@/components/TextInput";
 import { ArrowRight, Check, ChevronDown, ChevronUp } from "@/components/icons";
 
+/** Characters above which a question counts as long (the open questions and `sources`). */
+const LONG_QUESTION = 90;
+
 type Props = {
   question: Question;
   lang: Lang;
@@ -82,6 +85,8 @@ export function QuestionScreen({
   }
 
   const showEmail = wantsEmail(question, selected);
+  // a long question gets a slightly wider column, so it wraps into fewer lines
+  const long = t(question.text, lang).length > LONG_QUESTION;
   // a const keeps the narrowing inside the click handler below
   const way = question.type === "open" && !asking ? question.escape : undefined;
 
@@ -104,7 +109,8 @@ export function QuestionScreen({
   return (
     <section
       className={
-        "mx-auto flex min-h-dvh w-full max-w-2xl flex-col justify-center px-6 pb-28 pt-16 " +
+        "mx-auto flex min-h-dvh w-full flex-col justify-center px-6 pb-28 pt-16 " +
+        (long ? "max-w-3xl " : "max-w-2xl ") +
         (direction === "back" ? "animate-enter-down" : "animate-enter-up")
       }
     >

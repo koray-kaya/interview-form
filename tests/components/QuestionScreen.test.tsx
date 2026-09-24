@@ -49,6 +49,14 @@ describe("QuestionScreen", () => {
     expect(onBack).toHaveBeenCalled();
   });
 
+  it("gives a long question a little more width, a short one keeps its column", () => {
+    const long = render(<QuestionScreen question={q("case")} lang="de" number={4} onSubmit={() => {}} />);
+    expect(long.container.querySelector("section")).toHaveClass("max-w-3xl");
+    long.unmount();
+    const short = render(<QuestionScreen question={q("role")} lang="de" number={1} onSubmit={() => {}} />);
+    expect(short.container.querySelector("section")).toHaveClass("max-w-2xl");
+  });
+
   it("Enter submits a choice question too, even with an option focused", async () => {
     const onSubmit = vi.fn();
     render(<QuestionScreen question={q("role")} lang="en" number={1} onSubmit={onSubmit} />);

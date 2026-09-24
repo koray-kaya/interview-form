@@ -337,8 +337,12 @@ Worst case per participant 6 calls ≈ 0.02 USD.
   5 4 3 2 7 6 5 4, mod 11 — ported from company-reach `tools/uid.py`). A
   stripped or forged tag yields the fixed questions only. This is not
   authentication; it is a cost gate.
-- One Vercel WAF rate-limit rule (Hobby allows one): `/api/*`, 60 requests per
-  10 minutes per IP.
+- One Vercel firewall rate-limit rule: `/api` prefix, 120 requests per 10
+  minutes per IP (fixed window; a whole form is about 25 requests). Raised
+  from 60 on 2026-09-24: a test of the rule locked Koray's own network out for
+  ten minutes, which showed that two or three people behind one office
+  address could reach 60. A blocked request shows "too many requests", not a
+  connection error.
 - AI Gateway project budget 10 USD/month with alerts at 50/75/100 %. On 402
   the form continues without follow-ups.
 - `PROBE_ENABLED=false` switches probing off; on Vercel this needs a redeploy

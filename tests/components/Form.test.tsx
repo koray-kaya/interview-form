@@ -196,6 +196,23 @@ describe("Form", () => {
     expect(await screen.findByRole("button", { name: /Start/ })).toBeInTheDocument();
   });
 
+  it("says plainly when too many requests came from this network, at the start", async () => {
+    const { fakeApi } = await import("../support/fakeApi");
+    fakeApi.startResponse.mockRejectedValueOnce(new fakeApi.ApiError(429, "request failed"));
+    render(<Form initialLang="en" />);
+    await userEvent.click(screen.getByRole("checkbox"));
+    await userEvent.click(screen.getByRole("button", { name: /Start/ }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/Too many requests/);
+  });
+
+  it("says plainly when too many requests came from this network, on an answer", async () => {
+    const { fakeApi } = await import("../support/fakeApi");
+    await start("en");
+    fakeApi.postAnswer.mockRejectedValueOnce(new fakeApi.ApiError(429, "request failed"));
+    await choose(/Sales/);
+    expect(await screen.findByRole("alert")).toHaveTextContent(/Too many requests/);
+  });
+
   it("keeps the answer on screen and says so when saving fails", async () => {
     await start("en");
     server.failNextAnswer = true;
