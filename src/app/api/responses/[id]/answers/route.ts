@@ -4,7 +4,7 @@
 // The question text stored with the answer comes from the form, never from
 // the request. Follow-ups (followupIndex 1–2) arrive in M3.
 import { z } from "zod";
-import { askedFollowUps, countProbeCalls, getResponse, logProbeCall, saveAnswer, setLang, type AnswerRow, type ResponseRow } from "@/db";
+import { askedFollowUps, countProbeCalls, deleteFollowUps, getResponse, logProbeCall, saveAnswer, setLang, type AnswerRow, type ResponseRow } from "@/db";
 import { AnswerValueSchema, applyAnswer, isEscape, isSkipped, sameAnswer, validate, type AnswerValue } from "@/engine";
 import { FORM, type OpenQuestion, type Question } from "@/form";
 import { probeEnabled } from "@/env";
@@ -42,10 +42,13 @@ export async function POST(request: Request, { params }: Context): Promise<Respo
   // The participant may have switched language since the response was created.
   // The request decides what they saw; the text itself still comes from the form.
   const lang = parsed.data.lang ?? found.response.lang;
-  if (lang !== found.response.lang) await setLang(id, lang);
+  // recorded only once the answer is accepted: a refused request changes nothing
+  const keepLang = async () => {
+    if (lang !== found.response.lang) await setLang(id, lang);
+  };
 
   if (parsed.data.followupIndex > 0) {
-    return await storeFollowUp({ id, question, index: parsed.data.followupIndex, value, lang, found });
+    return await storeFollowUp({ id, question, index: parsed.data.followupIndex, value, lang, found, keepLang });
   }
 
   const before = fixedAnswers(found.answers);
@@ -53,6 +56,7 @@ export async function POST(request: Request, { params }: Context): Promise<Respo
 
   const problem = validate(question, value, lang);
   if (problem) return json(400, { error: problem });
+  await keepLang();
 
   const after = applyAnswer(FORM, before, questionId, value);
   const cleaned = after[questionId];
@@ -71,8 +75,15 @@ export async function POST(request: Request, { params }: Context): Promise<Respo
   });
   if (!saved) return json(409, { error: "response already completed" });
 
-  // "I can't think of such a case" is an answer, not something to judge
-  if (isEscape(question, cleaned)) return json(200, { followUp: null });
+  // "I can't think of such a case" is an answer, not something to judge. It
+  // withdraws the case, so the answers to the model's questions about it go too;
+  // the probe_calls rows stay as the record of what was asked.
+  if (isEscape(question, cleaned)) {
+    if (found.answers.some((row) => row.question_id === questionId && row.followup_index > 0)) {
+      await deleteFollowUps(id, questionId);
+    }
+    return json(200, { followUp: null });
+  }
 
   const rows = withRow(found.answers, {
     question_id: questionId,
@@ -97,8 +108,9 @@ async function storeFollowUp(input: {
   value: AnswerValue;
   lang: Lang;
   found: { response: ResponseRow; answers: AnswerRow[] };
+  keepLang: () => Promise<void>;
 }): Promise<Response> {
-  const { id, question, index, value, lang, found } = input;
+  const { id, question, index, value, lang, found, keepLang } = input;
   if (!isProbed(question)) return json(400, { error: "question not active" });
   // the follow-up belongs to a written answer that still counts (see pendingFollowUps)
   const fixed = fixedAnswers(found.answers);
@@ -115,6 +127,7 @@ async function storeFollowUp(input: {
   // a follow-up is always answered in words; the escape belongs to the question itself
   const problem = "text" in value ? validate(question, value, lang) : t(UI.required, lang);
   if (problem) return json(400, { error: problem });
+  await keepLang();
 
   const saved = await saveAnswer({
     responseId: id,

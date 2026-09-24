@@ -10,6 +10,7 @@ vi.mock("@/db", () => ({
   countProbeCalls: vi.fn(async () => 0),
   logProbeCall: vi.fn(async () => {}),
   askedFollowUps: vi.fn(async () => []),
+  deleteFollowUps: vi.fn(async () => {}),
 }));
 vi.mock("@/probe", () => ({ runProbe: vi.fn() }));
 import * as db from "@/db";
@@ -223,6 +224,22 @@ describe("POST /api/responses/:id/answers — the probe", () => {
     });
   });
 
+  it("deletes the case's follow-up answers when the case is escaped after all", async () => {
+    probeable([
+      row("case", { text: "We looked into a supplier." }),
+      { question_id: "case", followup_index: 1, question_text: "Where did you look?", value: { text: "Their website." } },
+    ]);
+    await answer({ questionId: "case", followupIndex: 0, value: { option: "none" } });
+    expect(db.deleteFollowUps).toHaveBeenCalledWith(ID, "case");
+  });
+
+  it("keeps the follow-up answers when a written case is only edited", async () => {
+    probeable([row("case", { text: "We looked into a supplier." })]);
+    decides({ decision: "stop", followUp: undefined });
+    await answer({ questionId: "case", followupIndex: 0, value: { text: "We looked into a supplier in Ticino." } });
+    expect(db.deleteFollowUps).not.toHaveBeenCalled();
+  });
+
   it("gives pains no case as context when the case was escaped", async () => {
     probeable([row("case", { option: "none" })]);
     decides({ decision: "stop", followUp: undefined });
@@ -269,6 +286,19 @@ describe("POST /api/responses/:id/answers", () => {
     stored([], { lang: "de" });
     await answer({ questionId: "role", followupIndex: 0, value: { option: "sales" }, lang: "en" });
     expect(db.setLang).toHaveBeenCalledWith(ID, "en");
+  });
+
+  it("leaves the language alone when the answer is refused", async () => {
+    stored([], { lang: "de" });
+    const response = await answer({ questionId: "case", followupIndex: 0, value: { text: "   " }, lang: "en" });
+    expect(response.status).toBe(400);
+    expect(db.setLang).not.toHaveBeenCalled();
+  });
+
+  it("refuses an option the question does not offer", async () => {
+    stored([]);
+    expect((await answer({ questionId: "role", followupIndex: 0, value: { option: "ceo" } })).status).toBe(400);
+    expect(db.saveAnswer).not.toHaveBeenCalled();
   });
 
   it("leaves the response alone when the language did not change", async () => {

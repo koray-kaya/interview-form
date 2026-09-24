@@ -128,6 +128,17 @@ export async function saveAnswer(input: {
   return saved === true;
 }
 
+/**
+ * Deletes the answers to the model's follow-ups on one question (followup
+ * index 1–2). Used when the question's own answer is withdrawn by its escape.
+ */
+export async function deleteFollowUps(responseId: string, questionId: string): Promise<void> {
+  check(
+    await db().from("answers").delete().eq("response_id", responseId).eq("question_id", questionId).gt("followup_index", 0),
+    "deleteFollowUps",
+  );
+}
+
 /** Sets completed_at once; returns the timestamp that is stored. */
 export async function completeResponse(id: string): Promise<string> {
   check(
