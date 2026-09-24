@@ -168,7 +168,9 @@ function FormInBrowser({ initialLang, companyTag }: Props) {
       setDirection("forward");
       setStage("questions");
       return null;
-    } catch {
+    } catch (error) {
+      // the firewall's rate limit (429) is not a broken connection; say what it is
+      if (error instanceof ApiError && error.status === 429) return t(UI.tooMany, lang);
       return t(UI.startFailed, lang);
     }
   }
@@ -183,6 +185,7 @@ function FormInBrowser({ initialLang, companyTag }: Props) {
       asked = (await postAnswer(responseId, current.id, value, lang)).followUp;
     } catch (error) {
       if (error instanceof ApiError && error.status === 400) return error.message;
+      if (error instanceof ApiError && error.status === 429) return t(UI.tooMany, lang);
       return t(UI.saveFailed, lang);
     }
 
@@ -206,6 +209,7 @@ function FormInBrowser({ initialLang, companyTag }: Props) {
       asked = (await postAnswer(responseId, current.id, value, lang, followUp.index)).followUp;
     } catch (error) {
       if (error instanceof ApiError && error.status === 400) return error.message;
+      if (error instanceof ApiError && error.status === 429) return t(UI.tooMany, lang);
       return t(UI.saveFailed, lang);
     }
     setGiven([...given, { question: followUp.text, answer: written(value) }]);

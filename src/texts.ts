@@ -54,6 +54,10 @@ export const UI = {
     de: "Ihre Antwort konnte nicht gespeichert werden. Bitte prüfen Sie die Verbindung und drücken Sie erneut OK.",
     en: "Your answer could not be saved. Please check your connection and press OK again.",
   },
+  tooMany: {
+    de: "Zu viele Anfragen in kurzer Zeit aus diesem Netzwerk. Bitte versuchen Sie es in ein paar Minuten erneut.",
+    en: "Too many requests in a short time from this network. Please try again in a few minutes.",
+  },
   startFailed: {
     de: "Die Umfrage konnte nicht gestartet werden. Bitte prüfen Sie die Verbindung und versuchen Sie es erneut.",
     en: "The survey could not be started. Please check your connection and try again.",
