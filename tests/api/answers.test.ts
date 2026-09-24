@@ -230,6 +230,14 @@ describe("POST /api/responses/:id/answers — the probe", () => {
     expect(vi.mocked(probe.runProbe).mock.calls[0][0].context).toEqual([]);
   });
 
+  it("refuses a follow-up answer on a question the escape now skips", async () => {
+    probeable([row("case", { option: "none" })]);
+    vi.mocked(db.askedFollowUps).mockResolvedValue([{ question_id: "gains", followup_index: 1, followup_text: "What would that have changed?" }]);
+    const response = await answer({ questionId: "gains", followupIndex: 1, value: { text: "We would have declined." } });
+    expect(response.status).toBe(400);
+    expect(db.saveAnswer).not.toHaveBeenCalled();
+  });
+
   it("refuses the escape as the answer to a follow-up", async () => {
     probeable([row("case", { text: "We looked into a supplier." })]);
     vi.mocked(db.askedFollowUps).mockResolvedValue([{ question_id: "case", followup_index: 1, followup_text: "Where did you look?" }]);

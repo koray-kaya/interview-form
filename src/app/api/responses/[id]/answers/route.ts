@@ -100,6 +100,10 @@ async function storeFollowUp(input: {
 }): Promise<Response> {
   const { id, question, index, value, lang, found } = input;
   if (!isProbed(question)) return json(400, { error: "question not active" });
+  // the follow-up belongs to a written answer that still counts (see pendingFollowUps)
+  const fixed = fixedAnswers(found.answers);
+  const own = fixed[question.id];
+  if (!own || !("text" in own) || isSkipped(FORM, question.id, fixed)) return json(400, { error: "question not active" });
 
   const asked = await askedFollowUps(id);
   const match = asked.find((row) => row.question_id === question.id && row.followup_index === index);

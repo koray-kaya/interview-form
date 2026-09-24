@@ -248,6 +248,17 @@ describe("Form", () => {
     expect(screen.getByText(/Think of the last time/)).toBeInTheDocument();
   });
 
+  it("ArrowUp does not leave a question while the model's follow-up is on screen", async () => {
+    server.followUps.push({ index: 1, text: "Where did you look?" });
+    await reachCase();
+    await userEvent.type(screen.getByRole("textbox"), "We looked into a supplier.{Enter}");
+    await screen.findByText("Where did you look?");
+    (document.activeElement as HTMLElement | null)?.blur();
+    await userEvent.keyboard("{ArrowUp}");
+    expect(screen.getByText(/Think of the last time/)).toBeInTheDocument();
+    expect(screen.queryByText(/Who are your customers/)).not.toBeInTheDocument();
+  });
+
   it("ArrowUp elsewhere goes back", async () => {
     await start("en");
     await choose(/Sales/);

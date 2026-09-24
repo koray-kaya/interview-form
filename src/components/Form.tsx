@@ -139,7 +139,8 @@ function FormInBrowser({ initialLang, companyTag }: Props) {
   const current = currentId ? FORM.questions.find((q) => q.id === currentId) ?? null : null;
 
   function goBack() {
-    if (!currentId) return;
+    // while the model's follow-up is on screen the question is not finished
+    if (!currentId || followUp) return;
     const previous = previousQuestion(FORM, answers, currentId);
     if (!previous) return;
     setDirection("back");

@@ -67,6 +67,16 @@ describe("POST /api/responses/:id/complete", () => {
     expect((await complete()).status).toBe(200);
   });
 
+  it("completes when the only asked follow-up belongs to a question the escape now skips", async () => {
+    // gains was answered and followed up, then the case was escaped: gains and
+    // its follow-up rows are gone, the probe_calls row that asked it is not
+    stored(SHORT_PATH);
+    vi.mocked(db.askedFollowUps).mockResolvedValue([
+      { question_id: "gains", followup_index: 1, followup_text: "What would that have changed?" },
+    ]);
+    expect((await complete()).status).toBe(200);
+  });
+
   it("refuses while a question is unanswered", async () => {
     stored(SHORT_PATH.slice(0, 4));
     expect((await complete()).status).toBe(409);
