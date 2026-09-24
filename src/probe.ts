@@ -64,6 +64,39 @@ export function postCheck(output: ProbeOutput): boolean {
 
 export const PRIMARY_MODEL = "anthropic/claude-sonnet-5";
 export const FALLBACK_MODEL = "anthropic/claude-haiku-4.5";
+
+/**
+ * Inference stays in the EU (design §10). Both models are served there by AWS
+ * Bedrock in Frankfurt; the gateway fails the call rather than run it
+ * elsewhere, and the form then continues without a follow-up. Costs 10 % more
+ * than global routing (catalog, 2026-09-24).
+ */
+export const INFERENCE_REGION = { scope: "zone", geoRegion: "eu" } as const;
+
+const RoutingSchema = z.object({
+  gateway: z.object({
+    routing: z.object({
+      modelAttempts: z.array(
+        z.object({
+          providerAttempts: z
+            .array(z.object({ inferenceEndpoint: z.object({ geoRegion: z.string() }).nullable().optional() }))
+            .optional(),
+        }),
+      ),
+    }),
+  }),
+});
+
+/** The region the gateway reports it ran inference in, if it says. */
+export function resolvedRegion(metadata: unknown): string | undefined {
+  const parsed = RoutingSchema.safeParse(metadata);
+  if (!parsed.success) return undefined;
+  const regions = parsed.data.gateway.routing.modelAttempts
+    .flatMap((attempt) => attempt.providerAttempts ?? [])
+    .map((attempt) => attempt.inferenceEndpoint?.geoRegion)
+    .filter((region): region is string => region !== undefined);
+  return regions.at(-1);
+}
 /**
  * One deadline covers the primary model and the fallback (design §9).
  *
@@ -86,6 +119,8 @@ export type ProbeResult = {
   errorClass?: string;
   inputTokens?: number;
   outputTokens?: number;
+  /** Where the gateway says inference ran ("eu"); absent when it did not say. */
+  region?: string;
 };
 
 /**
@@ -127,7 +162,13 @@ export async function runProbe(input: ProbeInput, options: ProbeOptions = {}): P
       reasoning: options.reasoning ?? DEFAULT_REASONING,
       timeout: { totalMs: options.timeoutMs ?? DEADLINE_MS },
       providerOptions: {
-        gateway: { models: [FALLBACK_MODEL], disallowPromptTraining: true },
+        gateway: {
+          models: [FALLBACK_MODEL],
+          disallowPromptTraining: true,
+          // zeroDataRetention is not set: the Hobby plan answers it with 403
+          // (measured 2026-09-24), and every call would fail
+          inferenceRegion: INFERENCE_REGION,
+        },
       },
     });
     const output = result.output;
@@ -138,6 +179,7 @@ export async function runProbe(input: ProbeInput, options: ProbeOptions = {}): P
       inputTokens: result.usage.inputTokens,
       outputTokens: result.usage.outputTokens,
       reason: output.reason,
+      region: resolvedRegion(result.providerMetadata),
     };
     if (postCheck(output)) {
       return { ...call, decision: "ask", followUp: output.followUp!.trim() };

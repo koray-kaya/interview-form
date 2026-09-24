@@ -1,0 +1,39 @@
+# The production smoke test (M4): after Vercel reports a successful production
+# deployment, walk the short path on the public URL with the reserved tag
+# ?c=SMOKE (never probed; the daily cron deletes it). The deployment's own
+# URL is behind Vercel's deployment protection, so the test goes to the
+# production domain, read from the repository secret PRODUCTION_URL: kept out
+# of this public repository, and masked in the public Actions logs. No trace
+# is uploaded on failure, because a trace would carry the URL. Can also be
+# started by hand.
+name: Smoke
+
+on:
+  deployment_status:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.deployment_status.state == 'success' &&
+       github.event.deployment.environment == 'Production')
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          PRODUCTION_URL: ${{ secrets.PRODUCTION_URL }}
+        if: env.PRODUCTION_URL == ''
+        run: echo "Set the repository secret PRODUCTION_URL first." && exit 1
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run smoke
+        env:
+          SMOKE_URL: ${{ secrets.PRODUCTION_URL }}

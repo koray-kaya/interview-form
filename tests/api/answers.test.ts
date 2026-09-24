@@ -210,6 +210,18 @@ describe("POST /api/responses/:id/answers — the probe", () => {
     expect(input.lang).toBe("en");
     expect(input.transcript[0].answer).toBe("We looked into a new supplier.");
   });
+  it("logs the region the call ran in, and null when the gateway did not say", async () => {
+    probeable();
+    decides({ region: "eu" });
+    await answer(caseAnswer);
+    expect(db.logProbeCall).toHaveBeenLastCalledWith(expect.objectContaining({ inference_region: "eu" }));
+    vi.mocked(db.logProbeCall).mockClear();
+    probeable([row("case", { text: "We looked into a new supplier." })]);
+    decides({ region: undefined, decision: "error", errorClass: "provider" });
+    await answer({ questionId: "case", followupIndex: 0, value: { text: "We looked into a supplier in Ticino." } });
+    expect(db.logProbeCall).toHaveBeenLastCalledWith(expect.objectContaining({ inference_region: null }));
+  });
+
   it("never asks the model about an escaped case, and stores the escape with the question text", async () => {
     probeable();
     decides();

@@ -215,6 +215,7 @@ async function probeAnswer(input: {
     input_tokens: result.inputTokens ?? null,
     output_tokens: result.outputTokens ?? null,
     latency_ms: result.latencyMs,
+    inference_region: result.region ?? null,
   });
 
   return result.decision === "ask" && result.followUp ? { index, text: result.followUp } : null;

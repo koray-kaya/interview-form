@@ -45,6 +45,13 @@ export function pendingFollowUps(
     .map((ask) => ({ questionId: ask.question_id, index: ask.followup_index, text: ask.followup_text }));
 }
 
+/**
+ * The company tag the production smoke test uses (?c=SMOKE). Not a valid UID,
+ * so it never reaches the model; the daily cron deletes these responses and
+ * the analysis CSV leaves them out. Exact upper case only.
+ */
+export const SMOKE_TAG = "SMOKE";
+
 /** First eight hex characters of the response id. */
 export function referenceCode(id: string): string {
   return id.replaceAll("-", "").slice(0, 8);

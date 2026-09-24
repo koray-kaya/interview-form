@@ -62,10 +62,10 @@ invitation link  ?c=CHE123456789  (&l=en for English)
 [Vercel function, fra1]  route handlers
       │  service_role (server only)          │  OIDC
       ▼                                       ▼
-[Supabase, Zurich]                     [AI Gateway] ─► Anthropic (EU)
- responses · answers · probe_calls      claude-sonnet-5 / haiku-4.5
+[Supabase, Zurich]                     [AI Gateway] ─► AWS Bedrock, eu-central-1
+ responses · answers · probe_calls      claude-sonnet-5 / haiku-4.5 (inferenceRegion: eu)
 
-[Vercel cron, daily] ─► GET /api/cron/daily ─► keep-alive read + JSON export ─► Vercel Blob
+[Vercel cron, daily] ─► GET /api/cron/daily ─► keep-alive read + cleanup + JSON export ─► Vercel Blob
 ```
 
 Deterministic: screen order, skip rule, validation, follow-up limit, post-
@@ -317,8 +317,14 @@ Worst case per participant 6 calls ≈ 0.02 USD.
 ## 10. Security and privacy
 
 - Vercel functions pinned to `fra1` (`vercel.json`), Supabase in Zurich,
-  model endpoints in the EU. The path is Frankfurt → Zurich for data,
-  Frankfurt → AI Gateway → Anthropic EU for the three probed answers.
+  model inference pinned to the EU: every call sets
+  `providerOptions.gateway.inferenceRegion = { scope: "zone", geoRegion: "eu" }`
+  and is served by AWS Bedrock in `eu-central-1` (Frankfurt); a call the EU
+  cannot serve fails and the form continues without a follow-up. The region
+  the gateway reports is logged per call (`probe_calls.inference_region`).
+  Until M4 no region was set and calls were routed globally (checked
+  2026-09-24). The gateway itself may process the request in any Vercel
+  region before forwarding it (Vercel docs, regional inference).
 - `SUPABASE_SECRET_KEY` exists only in Vercel environment variables and
   `.env.local`; the browser bundle contains no Supabase client.
 - Gateway authentication by OIDC; no API key exists.
@@ -337,9 +343,11 @@ Worst case per participant 6 calls ≈ 0.02 USD.
   the form continues without follow-ups.
 - `PROBE_ENABLED=false` switches probing off; on Vercel this needs a redeploy
   (minutes). That is the kill switch.
-- Consent text names the processors and promises only what the tiers
-  deliver: "not used to train models" (gateway catalog: `no_training: all`
-  for both models, 2026-09-21); no zero-retention claim.
+- The consent text promises only what the tiers deliver and, since form 2.0,
+  names no processor on screen; "where does the AI run" is answered in the
+  ethics file. Every call sets `disallowPromptTraining`; zero data retention
+  is not available on the Hobby plan (the gateway answers it with 403), so
+  there is no zero-retention claim.
 - Withdrawal: the reference code on the thank-you screen; the runbook has the
   delete-by-code step. Retention after the thesis is an open decision for the
   ethics approval.
@@ -388,12 +396,18 @@ Worst case per participant 6 calls ≈ 0.02 USD.
 
 ## 13. Deployment
 
-Vercel project (name without any product name; decided at M4), Hobby plan,
-`regions: ["fra1"]`, environment variables `SUPABASE_URL`,
-`SUPABASE_SECRET_KEY`, `AI_GATEWAY_MODEL`, `PROBE_ENABLED`,
-`CRON_SECRET`, `BLOB_READ_WRITE_TOKEN`. Preview deployments stay behind
-Vercel Authentication; production is public but `noindex`. Locally:
-`vercel link && vercel env pull` gives the OIDC token for the gateway.
+Vercel project on the Hobby plan, connected to the GitHub repository: a merge
+to `main` deploys to production, a pull request gets a preview. The project
+name names the survey and the region, not a product or the school (decided
+2026-09-24); the production URL is kept out of this public repository.
+`regions: ["fra1"]`; Node 24 (`package.json` `engines`). Environment
+variables, Production only: `SUPABASE_URL`, `SUPABASE_SECRET_KEY`,
+`CRON_SECRET`, `PROBE_ENABLED`, `BLOB_READ_WRITE_TOKEN` (set by connecting the
+Blob store). The gateway authenticates by OIDC; no API key exists in
+production. Preview deployments stay behind Vercel Authentication; production
+is public but `noindex`. CI (`.github/workflows/ci.yml`) runs lint, types,
+tests and a build on every pull request; `smoke.yml` runs the Playwright smoke
+test against production after each production deployment.
 
 ## 14. Milestones
 

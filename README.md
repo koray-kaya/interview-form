@@ -21,7 +21,7 @@ is the form they fill in.
 
 ## Status
 
-Milestones 1 to 3 of 5 are done: the form runs in both languages, stores every
+Milestones 1 to 3 of 5 are done, and form 2.0 on top of them: the form runs in both languages, stores every
 answer in the database in Zurich, and asks the AI follow-up on the same screen
 as the question that earned it. Five milestones — skeleton and form engine,
 storage, the AI follow-up, deployment, pilot. Each milestone is written with an
@@ -43,7 +43,7 @@ npm run export       # all rows to data/export-YYYY-MM-DD.json, and the analysis
 
 The AI follow-up is off unless `PROBE_ENABLED=true`, and it only runs for a
 link whose `?c=` is a well-formed Swiss company number — that gate is what
-keeps the cost down. The prompts are measured against thirty invented answers:
+keeps the cost down. The prompts are measured against thirty-six invented answers:
 
 ```bash
 RUN_LLM_EVALS=1 npm run evals   # calls the real model; needs a gateway key
@@ -56,13 +56,73 @@ works for the right reason.
 The database schema is in `supabase/migrations/`; apply it to a new Supabase
 project before the first run.
 
+```bash
+SMOKE_URL=http://localhost:3000 npm run smoke   # the short path in a phone-sized browser
+```
+
+The smoke test walks the short path with the reserved company tag `?c=SMOKE`,
+which never reaches the model; the daily job deletes those responses and the
+analysis CSV leaves them out. CI runs it against production after every
+production deployment (the URL is the repository secret `PRODUCTION_URL`).
+
+## Operations
+
+Production runs on Vercel (functions in Frankfurt, `fra1`), the database is a
+Supabase project in Zurich, and every model call is pinned to the EU (AWS
+Bedrock, Frankfurt) through the AI Gateway; `probe_calls.inference_region`
+records where each call ran. A daily job at 03:00 UTC keeps the database
+awake, deletes the smoke test's responses and those left unfinished for seven
+days, and writes a private JSON export to Vercel Blob.
+
+**1. Export the data.**
+1. `npm run export` on a machine with `.env.local`: `data/export-YYYY-MM-DD.json`
+   (every row, plus the form) and `.csv` (one row per completed response).
+2. The daily exports are in Vercel → the project → Storage → the Blob store,
+   `exports/YYYY-MM-DD.json` (private; download from the dashboard).
+
+**2. Switch the AI follow-ups off (and on).**
+1. Vercel → the project → Settings → Environment Variables → `PROBE_ENABLED`:
+   set it to `false` for Production.
+2. Deployments → the current production deployment → Redeploy. Takes a few
+   minutes; the form keeps working and simply asks no follow-ups.
+3. Switch on again the same way with `true`.
+
+**3. Delete a participant by reference code** (the eight characters on their
+thank-you screen are the start of the response id).
+1. Supabase → SQL editor, find it (the code must be all eight characters):
+   `select id, created_at from public.responses where id::text like lower('<code>') || '%';`
+2. Exactly one row: delete it by that row's full id, never by the pattern —
+   `delete from public.responses where id = '<full id from step 1>';`
+   (answers and model calls go with it).
+3. Daily exports taken before today still hold the answers: delete those files
+   in the Blob store; the next night's export is clean. Delete any local
+   `data/export-*` files taken before the deletion too.
+
+**4. Check the budget and the spend.**
+1. Vercel → AI Gateway → Budgets: the project's monthly limit (10 USD) and the
+   alerts at 50, 75 and 100 %.
+2. When the budget is used up the gateway answers 402; `probe_calls` logs
+   `error_class = budget`, and participants get the form without follow-ups.
+
+**5. Supabase is paused.** Free projects pause after about a week without
+activity; the daily job's read is meant to prevent that.
+1. Symptom: the welcome screen says the survey could not be started, and
+   Vercel's function logs show failed database calls.
+2. Supabase → the project → Restore. Takes a few minutes; nothing is lost.
+3. If it happens during fieldwork, move the project to the Pro plan for the
+   fieldwork window.
+
+**6. Decommission after the thesis is submitted.**
+1. Final export (procedure 1), stored where the ethics approval says.
+2. Delete the Blob store, the Supabase project and the Vercel project; remove
+   the AI Gateway budget.
+3. Set this repository to archived.
+
 ## Notes
 
 - Built with Next.js, Tailwind, the AI SDK (via Vercel AI Gateway), Supabase
   and Zod. Deployed on Vercel.
 - The design, the audit of the design and the build plan are in
   [docs/](docs/) and [IMPLEMENTATION.md](IMPLEMENTATION.md).
-- Operations (export, disable the AI, delete a participant) will be
-  documented here at milestone 4.
 
 MIT licence. Koray Kaya, 2026.

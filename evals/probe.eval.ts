@@ -81,6 +81,7 @@ function writeReport(): void {
       (seconds) => `| calls that would miss a ${seconds} s deadline | ${latencies.filter((ms) => ms >= seconds * 1_000).length} |`,
     ),
     `| mean follow-up length | ${mean(lengths)} characters |`,
+    `| trials that ran in the EU | ${trials.filter((row) => row.result.region === "eu").length} / ${trials.length} |`,
     "",
     "## Every question the model wrote",
     "",
@@ -89,7 +90,7 @@ function writeReport(): void {
   const body = trials.map((row) => {
     const langs = row.fixture.answerLang ? `${row.fixture.lang}, answer ${row.fixture.answerLang}` : row.fixture.lang;
     const head = `**${row.fixture.question} · ${row.fixture.id} (${langs})** — expected ${row.fixture.expect}, trial ${row.trial}`;
-    const got = `- ${outcome(row.result)} in ${row.result.latencyMs} ms`;
+    const got = `- ${outcome(row.result)} in ${row.result.latencyMs} ms, region ${row.result.region ?? "?"}`;
     const wrote = row.result.followUp ? `- > ${row.result.followUp} _(${languageOf(row.result.followUp)})_` : null;
     const why = row.result.reason ? `- _${row.result.reason}_` : null;
     return [head, got, wrote, why].filter(Boolean).join("\n");
