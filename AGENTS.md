@@ -1,7 +1,7 @@
 # interview-form
 
 A short online form for a master's thesis on how Swiss firms look into
-other companies. Eight screens, one question per screen, German or English.
+other companies. Fourteen screens, one question per screen, German or English.
 Three open questions get up to two AI follow-up questions each, asked only
 when the answer leaves out something the question needs, under a rule that is
 written down. Answers go to a database in Zurich. Built because Typeform's AI

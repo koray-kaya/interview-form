@@ -7,12 +7,13 @@ is the form they fill in.
 
 ## What it does
 
-1. Shows eight questions, one per screen, in German or English. About six
-   minutes.
+1. Shows fourteen questions, one per screen, in German or English. About ten
+   minutes: three to write, the rest to tap.
 2. On the three open questions, asks up to two short follow-up questions —
    but only when the answer leaves out something the question needs (the
-   steps taken, a concrete example, why it matters). The rule that decides
-   this is a versioned prompt file, so the thesis can print it.
+   steps and sources, a concrete situation, what a better result would have
+   changed). The rule that decides this is a versioned prompt file, so the
+   thesis can print it.
 3. Stores the answers in a database in Zurich. Every AI decision is logged
    with its cost and outcome.
 4. Never asks who the participant is. The invitation link already carries
