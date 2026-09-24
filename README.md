@@ -125,7 +125,8 @@ activity; the daily job's read is meant to prevent that.
    from which kind of link. It never shows answer text.
 
 **7. Decommission after the thesis is submitted.**
-1. Final export (procedure 1), stored where the ethics approval says.
+1. Final export (procedure 1), stored where the supervisors (or an ethics
+   approval, if one is needed) say.
 2. Delete the Blob store, the Supabase project and the Vercel project; remove
    the AI Gateway budget.
 3. Set this repository to archived.
