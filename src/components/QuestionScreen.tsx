@@ -5,7 +5,7 @@
 // onSubmit. Slides in from below, or from above after Back.
 import { useEffect, useState } from "react";
 import type { Question } from "@/form";
-import { cleanAnswer, validate, wantsEmail, type AnswerValue } from "@/engine";
+import { cleanAnswer, isEscape, validate, wantsEmail, type AnswerValue } from "@/engine";
 import { t, type Lang } from "@/i18n";
 import { UI } from "@/texts";
 import { ChoiceInput } from "@/components/ChoiceInput";
@@ -63,6 +63,17 @@ export function QuestionScreen({
     const problem = validate(question, value, lang);
     setError(problem);
     if (problem) return;
+    await send(value);
+  }
+
+  // The one-tap way out of an open question. Whatever is in the box is not sent.
+  async function escape(id: string) {
+    if (busy) return;
+    setError(null);
+    await send({ option: id });
+  }
+
+  async function send(value: AnswerValue) {
     setBusy(true);
     const serverProblem = asking && onFollowUp ? await onFollowUp(value) : await onSubmit(value);
     // on success the next screen replaces this one; these updates then do nothing
@@ -71,6 +82,8 @@ export function QuestionScreen({
   }
 
   const showEmail = wantsEmail(question, selected);
+  // a const keeps the narrowing inside the click handler below
+  const way = question.type === "open" && !asking ? question.escape : undefined;
 
   // Enter submits a choice question from anywhere on the page. Text areas and
   // the e-mail field handle Enter themselves. preventDefault stops the focused
@@ -132,6 +145,17 @@ export function QuestionScreen({
               selected={selected}
               onChange={setSelected}
             />
+          )}
+
+          {way && (
+            <button
+              type="button"
+              onClick={() => escape(way.id)}
+              aria-pressed={isEscape(question, initial)}
+              className="self-start text-base text-accent/80 underline decoration-accent/30 underline-offset-4 transition hover:text-accent aria-pressed:font-medium aria-pressed:text-accent"
+            >
+              {t(way.label, lang)}
+            </button>
           )}
 
           {showEmail && question.type === "multi" && question.email && (

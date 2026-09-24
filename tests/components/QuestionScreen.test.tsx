@@ -106,3 +106,43 @@ describe("QuestionScreen with rows", () => {
     expect(onSubmit).toHaveBeenCalledWith({ rows: { buy: "never", sell: "never" } });
   });
 });
+
+const story: Question = {
+  id: "story",
+  type: "open",
+  text: { de: "Erzählen Sie", en: "Tell us" },
+  maxChars: 4000,
+  escape: { id: "none", label: { de: "Ich erinnere mich an keinen solchen Fall.", en: "I can't think of such a case." } },
+};
+
+describe("QuestionScreen with an escape", () => {
+  it("answers in one tap, whatever is in the box", async () => {
+    const onSubmit = vi.fn();
+    render(<QuestionScreen question={story} lang="en" number={4} onSubmit={onSubmit} />);
+    await userEvent.type(screen.getByRole("textbox"), "half a thought");
+    await userEvent.click(screen.getByRole("button", { name: "I can't think of such a case." }));
+    expect(onSubmit).toHaveBeenCalledWith({ option: "none" });
+  });
+
+  it("after Back, shows an empty box and the escape marked", () => {
+    render(<QuestionScreen question={story} lang="de" number={4} initial={{ option: "none" }} onSubmit={() => {}} />);
+    expect(screen.getByRole("textbox")).toHaveValue("");
+    expect(screen.getByRole("button", { name: /keinen solchen Fall/ })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("shows a server error after the escape", async () => {
+    render(<QuestionScreen question={story} lang="en" number={4} onSubmit={async () => "Your answer could not be saved."} />);
+    await userEvent.click(screen.getByRole("button", { name: /such a case/ }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("could not be saved");
+  });
+
+  it("is not offered while the model's follow-up is on screen, nor where the question has none", () => {
+    const { unmount } = render(
+      <QuestionScreen question={story} lang="en" number={4} onSubmit={() => {}} asking="Where did you look?" given={[{ answer: "We asked around." }]} />,
+    );
+    expect(screen.queryByRole("button", { name: /such a case/ })).not.toBeInTheDocument();
+    unmount();
+    render(<QuestionScreen question={q("pains")} lang="en" number={6} onSubmit={() => {}} />);
+    expect(screen.queryByRole("button", { name: /such a case/ })).not.toBeInTheDocument();
+  });
+});
