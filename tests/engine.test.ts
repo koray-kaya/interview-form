@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { FORM } from "@/form";
 import type { Form } from "@/form";
 import {
-  activeQuestions, applyAnswer, canProbe, cleanAnswer, isEscape, isSkipped, nextQuestion, previousQuestion,
+  AnswerValueSchema, activeQuestions, applyAnswer, canProbe, cleanAnswer, isEscape, isSkipped, nextQuestion, previousQuestion,
   progress, pruneSkipped, questionAfter, questionNumber, sameAnswer, validate, wantsEmail,
   type Answers,
 } from "@/engine";
@@ -244,5 +244,51 @@ describe("validate refuses what the question does not offer", () => {
     expect(validate(r("spent"), { option: "paid" }, "en")).toBe("Please choose an answer.");
     expect(validate(q("role"), { option: "ceo" }, "en")).toBe("Please choose an answer.");
     expect(validate(q("role"), { options: ["owner"] }, "en")).toBe("Please choose an answer.");
+  });
+});
+
+/** One rows question and a question it can skip, independent of the real form. */
+const OFTEN: Form = {
+  version: "0.0.0",
+  questions: [
+    { id: "often", type: "rows", text: words("often"), rows: [opt("buy"), opt("sell")], scale: [opt("never"), opt("monthly")] },
+    { id: "where", type: "multi", text: words("where"), options: [opt("web"), opt("phone")] },
+  ],
+  skips: [{ when: { question: "often", every: "never" }, skip: ["where"] }],
+};
+const often = OFTEN.questions[0];
+
+describe("rows", () => {
+  it("wants one point of the scale in every row, and nothing else", () => {
+    const every = "Please choose an answer in every row.";
+    expect(validate(often, { rows: { buy: "never", sell: "monthly" } }, "en")).toBeNull();
+    expect(validate(often, { rows: { buy: "never" } }, "en")).toBe(every);
+    expect(validate(often, { rows: { buy: "never", sell: "daily" } }, "en")).toBe(every);
+    expect(validate(often, { rows: { buy: "never", sell: "never", rent: "never" } }, "en")).toBe(every);
+    expect(validate(often, { options: ["never"] }, "en")).toBe(every);
+  });
+  it("parses as an answer value", () => {
+    expect(AnswerValueSchema.safeParse({ rows: { buy: "never" } }).success).toBe(true);
+    expect(AnswerValueSchema.safeParse({ rows: { buy: 3 } }).success).toBe(false);
+  });
+});
+
+describe("a rule on every value", () => {
+  it("holds when every row has the value, not when one differs or nothing is answered", () => {
+    expect(isSkipped(OFTEN, "where", { often: { rows: { buy: "never", sell: "never" } } })).toBe(true);
+    expect(isSkipped(OFTEN, "where", { often: { rows: { buy: "never", sell: "monthly" } } })).toBe(false);
+    expect(isSkipped(OFTEN, "where", {})).toBe(false);
+  });
+  it("prunes the answer it skips", () => {
+    const before: Answers = { often: { rows: { buy: "monthly", sell: "never" } }, where: { options: ["web"] } };
+    const all = { rows: { buy: "never", sell: "never" } };
+    expect(applyAnswer(OFTEN, before, "often", all)).toEqual({ often: all });
+  });
+});
+
+describe("sameAnswer inside rows", () => {
+  it("ignores key order inside rows, as Postgres jsonb reorders keys", () => {
+    expect(sameAnswer({ rows: { "new-customers": "never", competitors: "weekly" } }, { rows: { competitors: "weekly", "new-customers": "never" } })).toBe(true);
+    expect(sameAnswer({ rows: { a: "never" } }, { rows: { a: "weekly" } })).toBe(false);
   });
 });

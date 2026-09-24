@@ -1,6 +1,6 @@
 "use client";
 // One question on one screen: number, title, helper line, the right input for
-// the question type, the validation error, OK, and the up/down buttons in the
+// the question type (text, choices, or rows), the validation error, OK, and the up/down buttons in the
 // corner. Holds the draft answer locally; hands a valid AnswerValue up through
 // onSubmit. Slides in from below, or from above after Back.
 import { useEffect, useState } from "react";
@@ -9,6 +9,7 @@ import { cleanAnswer, validate, wantsEmail, type AnswerValue } from "@/engine";
 import { t, type Lang } from "@/i18n";
 import { UI } from "@/texts";
 import { ChoiceInput } from "@/components/ChoiceInput";
+import { RowsInput } from "@/components/RowsInput";
 import { TextInput } from "@/components/TextInput";
 import { ArrowRight, Check, ChevronDown, ChevronUp } from "@/components/icons";
 
@@ -42,12 +43,14 @@ export function QuestionScreen({
   // a follow-up starts from an empty box; the earlier answer is shown above it
   const [text, setText] = useState(!asking && initial && "text" in initial ? initial.text : "");
   const [selected, setSelected] = useState<string[]>(initialSelected(initial));
+  const [rows, setRows] = useState<Record<string, string>>(initial && "rows" in initial ? initial.rows : {});
   const [email, setEmail] = useState(initial && "email" in initial ? (initial.email ?? "") : "");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   function draft(): AnswerValue {
     if (question.type === "open") return { text: text.trim() };
+    if (question.type === "rows") return { rows };
     if (question.type === "single") return selected.length ? { option: selected[0] } : { options: [] };
     // cleanAnswer drops an e-mail the chosen options do not need
     return cleanAnswer(question, { options: selected, email });
@@ -118,6 +121,8 @@ export function QuestionScreen({
 
           {question.type === "open" ? (
             <TextInput value={text} maxChars={question.maxChars} lang={lang} onChange={setText} onSubmit={submit} />
+          ) : question.type === "rows" ? (
+            <RowsInput rows={question.rows} scale={question.scale} lang={lang} value={rows} onChange={setRows} />
           ) : (
             <ChoiceInput
               options={question.options}

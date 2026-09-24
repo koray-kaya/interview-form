@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { FORM } from "@/form";
+import { FORM, type Question } from "@/form";
 import { QuestionScreen } from "@/components/QuestionScreen";
 
 const q = (id: string) => FORM.questions.find((x) => x.id === id)!;
@@ -57,5 +57,52 @@ describe("QuestionScreen", () => {
     expect(onSubmit).toHaveBeenCalledTimes(1);
     expect(onSubmit).toHaveBeenCalledWith({ option: "sales" });
     expect(screen.getByRole("radio", { name: /Sales/ })).toHaveAttribute("aria-checked", "true");
+  });
+});
+
+const often: Question = {
+  id: "often",
+  type: "rows",
+  text: { de: "Wie oft?", en: "How often?" },
+  rows: [
+    { id: "buy", label: { de: "Eingekauft", en: "Bought" } },
+    { id: "sell", label: { de: "Verkauft", en: "Sold" } },
+  ],
+  scale: [
+    { id: "never", label: { de: "Nie", en: "Never" } },
+    { id: "monthly", label: { de: "Monatlich", en: "Monthly" } },
+  ],
+};
+
+describe("QuestionScreen with rows", () => {
+  it("takes one point per row and wants every row before OK", async () => {
+    const onSubmit = vi.fn();
+    render(<QuestionScreen question={often} lang="en" number={10} onSubmit={onSubmit} />);
+    const bought = screen.getByRole("radiogroup", { name: "Bought" });
+    await userEvent.click(within(bought).getByRole("radio", { name: "Never" }));
+    await userEvent.click(within(bought).getByRole("radio", { name: "Monthly" }));
+    expect(within(bought).getByRole("radio", { name: "Monthly" })).toHaveAttribute("aria-checked", "true");
+    expect(within(bought).getByRole("radio", { name: "Never" })).toHaveAttribute("aria-checked", "false");
+    await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Please choose an answer in every row.");
+    expect(onSubmit).not.toHaveBeenCalled();
+    await userEvent.click(within(screen.getByRole("radiogroup", { name: "Sold" })).getByRole("radio", { name: "Never" }));
+    await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    expect(onSubmit).toHaveBeenCalledWith({ rows: { buy: "monthly", sell: "never" } });
+  });
+
+  it("shows a saved answer again", () => {
+    render(<QuestionScreen question={often} lang="de" number={10} initial={{ rows: { buy: "never", sell: "monthly" } }} onSubmit={() => {}} />);
+    const sold = screen.getByRole("radiogroup", { name: "Verkauft" });
+    expect(within(sold).getByRole("radio", { name: "Monatlich" })).toHaveAttribute("aria-checked", "true");
+  });
+
+  it("has no letter keys, and Enter submits", async () => {
+    const onSubmit = vi.fn();
+    render(<QuestionScreen question={often} lang="en" number={10} initial={{ rows: { buy: "never", sell: "never" } }} onSubmit={onSubmit} />);
+    await userEvent.keyboard("b");
+    expect(within(screen.getByRole("radiogroup", { name: "Bought" })).getByRole("radio", { name: "Never" })).toHaveAttribute("aria-checked", "true");
+    await userEvent.keyboard("{Enter}");
+    expect(onSubmit).toHaveBeenCalledWith({ rows: { buy: "never", sell: "never" } });
   });
 });

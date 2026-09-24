@@ -6,15 +6,16 @@
 // arrives from outside (localStorage now, request bodies in M2). Everything
 // here is unit-tested without a browser.
 import { z } from "zod";
-import type { Form, Option, Question } from "@/form";
+import type { Form, Option, Question, Skip } from "@/form";
 import { t, type Lang } from "@/i18n";
 import { UI } from "@/texts";
 
-/** One answer: free text, one option, or several options (plus an e-mail). */
+/** One answer: free text, one option, several options (plus an e-mail), or one scale point per row. */
 export const AnswerValueSchema = z.union([
   z.object({ text: z.string() }),
   z.object({ option: z.string() }),
   z.object({ options: z.array(z.string()), email: z.string().optional() }),
+  z.object({ rows: z.record(z.string(), z.string()) }),
 ]);
 export type AnswerValue = z.infer<typeof AnswerValueSchema>;
 
@@ -26,13 +27,19 @@ function chosen(value: AnswerValue | undefined): string[] {
   if (!value) return [];
   if ("option" in value) return [value.option];
   if ("options" in value) return value.options;
+  if ("rows" in value) return Object.values(value.rows);
   return [];
 }
 
+/** Whether a skip rule's condition holds for the answers so far. */
+function holds(when: Skip["when"], answers: Answers): boolean {
+  const values = chosen(answers[when.question]);
+  if ("is" in when) return values.includes(when.is);
+  return values.length > 0 && values.every((value) => value === when.every);
+}
+
 export function isSkipped(form: Form, questionId: string, answers: Answers): boolean {
-  return form.skips.some(
-    (rule) => rule.skip.includes(questionId) && chosen(answers[rule.when.question]).includes(rule.when.is),
-  );
+  return form.skips.some((rule) => rule.skip.includes(questionId) && holds(rule.when, answers));
 }
 
 export function activeQuestions(form: Form, answers: Answers): Question[] {
@@ -133,6 +140,12 @@ export function validate(question: Question, value: AnswerValue, lang: Lang): st
   if (question.type === "single") {
     return "option" in value && known(question.options, value.option) ? null : t(UI.chooseOne, lang);
   }
+  if (question.type === "rows") {
+    if (!("rows" in value)) return t(UI.answerEveryRow, lang);
+    const everyRow = question.rows.every((row) => known(question.scale, value.rows[row.id]));
+    const onlyRows = Object.keys(value.rows).every((id) => known(question.rows, id));
+    return everyRow && onlyRows ? null : t(UI.answerEveryRow, lang);
+  }
   if (!("options" in value) || value.options.length === 0) return t(UI.chooseOne, lang);
   const picked = value.options;
   if (!picked.every((id) => known(question.options, id))) return t(UI.chooseOne, lang);
@@ -156,8 +169,20 @@ export function questionNumber(form: Form, answers: Answers, questionId: string)
   return activeQuestions(form, answers).findIndex((q) => q.id === questionId) + 1;
 }
 
-/** Whether two answers are the same, whatever order their keys arrive in. */
+/** The value with every object's keys sorted, at any depth; arrays keep their order. */
+function canonical(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value)
+        .sort(([x], [y]) => x.localeCompare(y))
+        .map(([key, inner]) => [key, canonical(inner)]),
+    );
+  }
+  return value;
+}
+
+/** Whether two answers are the same, whatever order their keys arrive in (jsonb reorders them). */
 export function sameAnswer(a: AnswerValue, b: AnswerValue): boolean {
-  const canonical = (value: AnswerValue) => JSON.stringify(Object.entries(value).sort(([x], [y]) => x.localeCompare(y)));
-  return canonical(a) === canonical(b);
+  return JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
 }

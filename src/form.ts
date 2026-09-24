@@ -39,9 +39,31 @@ export type OpenQuestion = {
   probe?: { maxFollowUps: number; context?: string[] };
 };
 
-export type Question = SingleQuestion | MultiQuestion | OpenQuestion;
+/**
+ * Several statements answered on one shared scale. Each statement is its own
+ * row with its own buttons, stacked, not a grid table (design §2). Answered as
+ * { rows: { [rowId]: scaleId } }.
+ */
+export type RowsQuestion = {
+  id: string;
+  type: "rows";
+  text: Text;
+  help?: Text;
+  rows: Option[];
+  scale: Option[];
+};
 
-export type Skip = { when: { question: string; is: string }; skip: string[] };
+export type Question = SingleQuestion | MultiQuestion | OpenQuestion | RowsQuestion;
+
+/**
+ * A skip rule. `is`: the answer contains this option (for rows: some row has
+ * it). `every`: the answer has at least one value and all of them are this one.
+ * Both must name a question that comes before the ones they skip.
+ */
+export type Skip = {
+  when: { question: string; is: string } | { question: string; every: string };
+  skip: string[];
+};
 
 export type Form = { version: string; questions: Question[]; skips: Skip[] };
 

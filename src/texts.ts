@@ -29,6 +29,7 @@ export const UI = {
   emailRequired: { de: "Bitte geben Sie eine E-Mail-Adresse an, damit ich Sie erreichen kann.", en: "Please enter an e-mail address so that I can reach you." },
   emailInvalid: { de: "Diese E-Mail-Adresse sieht nicht richtig aus.", en: "This e-mail address does not look right." },
   chooseOne: { de: "Bitte wählen Sie eine Antwort.", en: "Please choose an answer." },
+  answerEveryRow: { de: "Bitte wählen Sie in jeder Zeile eine Antwort.", en: "Please choose an answer in every row." },
   thanksTitle: { de: "Vielen Dank", en: "Thank you" },
   thanksBody: { de: "Ihre Antworten sind gespeichert.", en: "Your answers are saved." },
   referenceCode: { de: "Ihr Referenzcode", en: "Your reference code" },

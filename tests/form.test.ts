@@ -17,7 +17,7 @@ describe("FORM", () => {
     for (const q of FORM.questions) {
       expect(q.text.de.length).toBeGreaterThan(0);
       expect(q.text.en.length).toBeGreaterThan(0);
-      if (q.type !== "open") {
+      if (q.type === "single" || q.type === "multi") {
         expect(q.options.length).toBeGreaterThan(1);
         expect(new Set(q.options.map((o) => o.id)).size).toBe(q.options.length);
         for (const o of q.options) {
