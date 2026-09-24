@@ -21,8 +21,8 @@ export type MultiQuestion = {
   text: Text;
   help?: Text;
   options: Option[];
-  /** Choosing this option clears the others, and vice versa. */
-  exclusive?: string;
+  /** Choosing one of these clears every other option; choosing another clears these. */
+  exclusive?: string[];
   /** Ask for an e-mail address unless only this option is chosen. */
   email?: { unlessOption: string; label: Text };
 };
@@ -33,6 +33,8 @@ export type OpenQuestion = {
   text: Text;
   help?: Text;
   maxChars: number;
+  /** A one-tap way out ("I can't think of such a case"), stored as { option: escape.id }. Never probed. */
+  escape?: Option;
   /** AI follow-ups: at most maxFollowUps model calls; what the model looks for is in prompts/probe-<id>.md. */
   probe?: { maxFollowUps: number; context?: string[] };
 };
@@ -77,7 +79,7 @@ export const FORM: Form = {
         en: "In the last 12 months, did you look into another company because you needed …",
       },
       help: { de: "Mehrfachauswahl möglich.", en: "Choose all that apply." },
-      exclusive: "none",
+      exclusive: ["none"],
       options: [
         { id: "customer", label: { de: "einen neuen Kunden suchten", en: "a new customer" } },
         { id: "supplier", label: { de: "einen neuen Lieferanten suchten", en: "a new supplier" } },
@@ -141,7 +143,7 @@ export const FORM: Form = {
       id: "followup",
       type: "multi",
       text: { de: "Wären Sie offen für …", en: "Would you be open to …" },
-      exclusive: "neither",
+      exclusive: ["neither"],
       email: { unlessOption: "neither", label: { de: "Ihre E-Mail-Adresse", en: "Your e-mail address" } },
       options: [
         { id: "conversation", label: { de: "ein 20-minütiges Gespräch", en: "a 20-minute conversation" } },

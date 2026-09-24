@@ -43,7 +43,7 @@ describe("FORM", () => {
   it("skips case and duration when relations is none", () => {
     expect(FORM.skips).toEqual([{ when: { question: "relations", is: "none" }, skip: ["case", "duration"] }]);
     const relations = FORM.questions.find((q) => q.id === "relations");
-    expect(relations?.type === "multi" && relations.exclusive).toBe("none");
+    expect(relations?.type === "multi" && relations.exclusive).toEqual(["none"]);
   });
 
   it("asks for an e-mail on followup unless neither is chosen", () => {

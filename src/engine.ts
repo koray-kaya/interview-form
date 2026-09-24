@@ -6,7 +6,7 @@
 // arrives from outside (localStorage now, request bodies in M2). Everything
 // here is unit-tested without a browser.
 import { z } from "zod";
-import type { Form, Question } from "@/form";
+import type { Form, Option, Question } from "@/form";
 import { t, type Lang } from "@/i18n";
 import { UI } from "@/texts";
 
@@ -102,21 +102,45 @@ export function questionAfter(form: Form, answers: Answers, currentId: string): 
   return index >= 0 && index + 1 < active.length ? active[index + 1] : null;
 }
 
+/** Whether the answer is the open question's escape, the one-tap "I can't think of such a case". */
+export function isEscape(question: Question, value: AnswerValue | undefined): boolean {
+  return (
+    question.type === "open" &&
+    question.escape !== undefined &&
+    value !== undefined &&
+    "option" in value &&
+    value.option === question.escape.id
+  );
+}
+
+const known = (options: Option[], id: string | undefined): boolean => options.some((option) => option.id === id);
+
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/**
+ * Null when the answer is acceptable, otherwise the message to show. Checks the
+ * shape the question type expects and that every id is one the question
+ * offers: the server runs this on whatever a request carries.
+ */
 export function validate(question: Question, value: AnswerValue, lang: Lang): string | null {
   if (question.type === "open") {
+    if (isEscape(question, value)) return null;
     const text = "text" in value ? value.text.trim() : "";
     if (text.length === 0) return t(UI.required, lang);
     if (text.length > question.maxChars) return t(UI.tooLong, lang);
     return null;
   }
-  const picked = chosen(value);
-  if (picked.length === 0) return t(UI.chooseOne, lang);
-  if (question.type === "single") return null;
-  if (question.exclusive && picked.includes(question.exclusive) && picked.length > 1) return t(UI.chooseOne, lang);
+  if (question.type === "single") {
+    return "option" in value && known(question.options, value.option) ? null : t(UI.chooseOne, lang);
+  }
+  if (!("options" in value) || value.options.length === 0) return t(UI.chooseOne, lang);
+  const picked = value.options;
+  if (!picked.every((id) => known(question.options, id))) return t(UI.chooseOne, lang);
+  if (new Set(picked).size !== picked.length) return t(UI.chooseOne, lang);
+  const exclusive = question.exclusive ?? [];
+  if (picked.length > 1 && picked.some((id) => exclusive.includes(id))) return t(UI.chooseOne, lang);
   if (wantsEmail(question, picked)) {
-    const email = "email" in value ? (value.email ?? "").trim() : "";
+    const email = (value.email ?? "").trim();
     if (email.length === 0) return t(UI.emailRequired, lang);
     if (!EMAIL.test(email)) return t(UI.emailInvalid, lang);
   }

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { FORM } from "@/form";
 import type { Form } from "@/form";
 import {
-  activeQuestions, applyAnswer, canProbe, cleanAnswer, isSkipped, nextQuestion, previousQuestion,
+  activeQuestions, applyAnswer, canProbe, cleanAnswer, isEscape, isSkipped, nextQuestion, previousQuestion,
   progress, pruneSkipped, questionAfter, questionNumber, sameAnswer, validate, wantsEmail,
   type Answers,
 } from "@/engine";
@@ -188,5 +188,61 @@ describe("sameAnswer", () => {
     expect(sameAnswer({ text: "a" }, { text: "b" })).toBe(false);
     expect(sameAnswer({ options: ["customer", "supplier"] }, { options: ["supplier", "customer"] })).toBe(false);
     expect(sameAnswer({ option: "a" }, { options: ["a"] })).toBe(false);
+  });
+});
+
+const opt = (id: string) => ({ id, label: { de: id, en: id } });
+const words = (s: string) => ({ de: s, en: s });
+
+/** A small form with the rules form 2.0 needs, independent of the real questions. */
+const RULES: Form = {
+  version: "0.0.0",
+  questions: [
+    { id: "story", type: "open", text: words("story"), maxChars: 20, escape: opt("none") },
+    { id: "spent", type: "multi", text: words("spent"), options: [opt("no"), opt("paid"), opt("help"), opt("unsure")], exclusive: ["no", "unsure"] },
+    { id: "plain", type: "open", text: words("plain"), maxChars: 20 },
+  ],
+  skips: [{ when: { question: "story", is: "none" }, skip: ["spent"] }],
+};
+const r = (id: string) => RULES.questions.find((x) => x.id === id)!;
+
+describe("the escape", () => {
+  it("is a valid answer to an open question that offers it", () => {
+    expect(validate(r("story"), { option: "none" }, "en")).toBeNull();
+    expect(isEscape(r("story"), { option: "none" })).toBe(true);
+  });
+  it("is refused where it is not offered, and so is any other option", () => {
+    expect(validate(r("plain"), { option: "none" }, "en")).toBe("Please answer this question.");
+    expect(validate(r("story"), { option: "other" }, "en")).toBe("Please answer this question.");
+    expect(isEscape(r("plain"), { option: "none" })).toBe(false);
+    expect(isEscape(r("story"), { text: "none" })).toBe(false);
+    expect(isEscape(r("story"), undefined)).toBe(false);
+  });
+  it("skips what its rule names, and writing an answer after all brings it back", () => {
+    const escaped = applyAnswer(RULES, { story: { text: "x" }, spent: { options: ["no"] } }, "story", { option: "none" });
+    expect(escaped).toEqual({ story: { option: "none" } });
+    expect(isSkipped(RULES, "spent", escaped)).toBe(true);
+    const told = applyAnswer(RULES, escaped, "story", { text: "We asked around." });
+    expect(nextQuestion(RULES, told)?.id).toBe("spent");
+  });
+});
+
+describe("several exclusive options", () => {
+  it("allows each exclusive option alone, never with another", () => {
+    expect(validate(r("spent"), { options: ["no"] }, "en")).toBeNull();
+    expect(validate(r("spent"), { options: ["unsure"] }, "en")).toBeNull();
+    expect(validate(r("spent"), { options: ["paid", "help"] }, "en")).toBeNull();
+    expect(validate(r("spent"), { options: ["no", "paid"] }, "en")).toBe("Please choose an answer.");
+    expect(validate(r("spent"), { options: ["no", "unsure"] }, "en")).toBe("Please choose an answer.");
+  });
+});
+
+describe("validate refuses what the question does not offer", () => {
+  it("an unknown option, a repeated option, or the wrong shape", () => {
+    expect(validate(r("spent"), { options: ["gold"] }, "en")).toBe("Please choose an answer.");
+    expect(validate(r("spent"), { options: ["paid", "paid"] }, "en")).toBe("Please choose an answer.");
+    expect(validate(r("spent"), { option: "paid" }, "en")).toBe("Please choose an answer.");
+    expect(validate(q("role"), { option: "ceo" }, "en")).toBe("Please choose an answer.");
+    expect(validate(q("role"), { options: ["owner"] }, "en")).toBe("Please choose an answer.");
   });
 });
