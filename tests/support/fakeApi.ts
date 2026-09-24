@@ -4,7 +4,7 @@
 // Follow-ups are scripted: push onto `server.followUps` what the model should
 // ask next, and the fake hands them out one answer at a time, as the route does.
 import { vi } from "vitest";
-import { applyAnswer, type Answers, type AnswerValue } from "@/engine";
+import { applyAnswer, isEscape, type Answers, type AnswerValue } from "@/engine";
 import { FORM, FORM_VERSION } from "@/form";
 import type { Lang } from "@/i18n";
 import { isComplete, referenceCode } from "@/responses";
@@ -79,9 +79,9 @@ export const fakeApi = {
     } else {
       stored.answers = applyAnswer(FORM, stored.answers, questionId, value);
     }
-    // only the three open questions are probed, as on the server
+    // only the three open questions are probed, and never their escape, as on the server
     const question = FORM.questions.find((q) => q.id === questionId);
-    const probed = question?.type === "open" && question.probe !== undefined;
+    const probed = question?.type === "open" && question.probe !== undefined && !isEscape(question, value);
     const next = probed ? server.followUps.shift() : undefined;
     if (!next) return { followUp: null };
     stored.asked.push({ questionId, index: next.index, text: next.text });

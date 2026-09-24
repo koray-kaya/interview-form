@@ -209,6 +209,34 @@ describe("POST /api/responses/:id/answers — the probe", () => {
     expect(input.lang).toBe("en");
     expect(input.transcript[0].answer).toBe("We looked into a new supplier.");
   });
+  it("never asks the model about an escaped case, and stores the escape with the question text", async () => {
+    probeable();
+    decides();
+    const response = await answer({ questionId: "case", followupIndex: 0, value: { option: "none" } });
+    expect(await response.json()).toEqual({ followUp: null });
+    expect(probe.runProbe).not.toHaveBeenCalled();
+    expect(db.logProbeCall).not.toHaveBeenCalled();
+    expect(vi.mocked(db.saveAnswer).mock.calls[0][0]).toMatchObject({
+      questionId: "case",
+      value: { option: "none" },
+      questionText: "Think of the last time you needed to find out something about other companies. What did you need to know, and how did you go about it?",
+    });
+  });
+
+  it("gives pains no case as context when the case was escaped", async () => {
+    probeable([row("case", { option: "none" })]);
+    decides({ decision: "stop", followUp: undefined });
+    await answer({ questionId: "pains", followupIndex: 0, value: { text: "Everything takes long." } });
+    expect(vi.mocked(probe.runProbe).mock.calls[0][0].context).toEqual([]);
+  });
+
+  it("refuses the escape as the answer to a follow-up", async () => {
+    probeable([row("case", { text: "We looked into a supplier." })]);
+    vi.mocked(db.askedFollowUps).mockResolvedValue([{ question_id: "case", followup_index: 1, followup_text: "Where did you look?" }]);
+    const response = await answer({ questionId: "case", followupIndex: 1, value: { option: "none" } });
+    expect(response.status).toBe(400);
+    expect(db.saveAnswer).not.toHaveBeenCalled();
+  });
 });
 
 describe("POST /api/responses/:id/answers", () => {
@@ -299,5 +327,32 @@ describe("POST /api/responses/:id/answers", () => {
     stored([]);
     vi.mocked(db.saveAnswer).mockResolvedValueOnce(false);
     expect((await answer({ questionId: "role", followupIndex: 0, value: { option: "sales" } })).status).toBe(409);
+  });
+
+  const ROWS = { "new-customers": "never", "new-suppliers": "1-2", "one-company": "3-6", competitors: "monthly", "own-position": "weekly" };
+
+  it("stores a rows answer with the stem as its question text", async () => {
+    stored([]);
+    expect((await answer({ questionId: "activities", followupIndex: 0, value: { rows: ROWS } })).status).toBe(200);
+    expect(vi.mocked(db.saveAnswer).mock.calls[0][0]).toMatchObject({
+      questionText: "How often did this happen in the last 12 months?",
+      value: { rows: ROWS },
+    });
+  });
+
+  it("refuses a rows answer with a row missing or a point the scale lacks", async () => {
+    stored([]);
+    const four = Object.fromEntries(Object.entries(ROWS).filter(([id]) => id !== "competitors"));
+    expect((await answer({ questionId: "activities", followupIndex: 0, value: { rows: four } })).status).toBe(400);
+    expect((await answer({ questionId: "activities", followupIndex: 0, value: { rows: { ...ROWS, competitors: "daily" } } })).status).toBe(400);
+    expect((await answer({ questionId: "case", followupIndex: 0, value: { rows: ROWS } })).status).toBe(400);
+    expect(db.saveAnswer).not.toHaveBeenCalled();
+  });
+
+  it("writes nothing when the same rows arrive with their keys in another order", async () => {
+    const reordered = Object.fromEntries(Object.entries(ROWS).reverse());
+    stored([row("activities", { rows: reordered })]);
+    expect((await answer({ questionId: "activities", followupIndex: 0, value: { rows: ROWS } })).status).toBe(200);
+    expect(db.saveAnswer).not.toHaveBeenCalled();
   });
 });

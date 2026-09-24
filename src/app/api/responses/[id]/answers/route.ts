@@ -5,13 +5,14 @@
 // the request. Follow-ups (followupIndex 1–2) arrive in M3.
 import { z } from "zod";
 import { askedFollowUps, countProbeCalls, getResponse, logProbeCall, saveAnswer, setLang, type AnswerRow, type ResponseRow } from "@/db";
-import { AnswerValueSchema, applyAnswer, isSkipped, sameAnswer, validate, type AnswerValue } from "@/engine";
+import { AnswerValueSchema, applyAnswer, isEscape, isSkipped, sameAnswer, validate, type AnswerValue } from "@/engine";
 import { FORM, type OpenQuestion, type Question } from "@/form";
 import { probeEnabled } from "@/env";
 import { t, type Lang } from "@/i18n";
 import { isUuid, json, readJson } from "@/http";
 import { runProbe, type Turn } from "@/probe";
 import { fixedAnswers } from "@/responses";
+import { UI } from "@/texts";
 
 const Body = z.object({
   questionId: z.string().max(64),
@@ -70,6 +71,9 @@ export async function POST(request: Request, { params }: Context): Promise<Respo
   });
   if (!saved) return json(409, { error: "response already completed" });
 
+  // "I can't think of such a case" is an answer, not something to judge
+  if (isEscape(question, cleaned)) return json(200, { followUp: null });
+
   const rows = withRow(found.answers, {
     question_id: questionId,
     followup_index: 0,
@@ -104,7 +108,8 @@ async function storeFollowUp(input: {
     return json(400, { error: "follow-up already answered" });
   }
 
-  const problem = validate(question, value, lang);
+  // a follow-up is always answered in words; the escape belongs to the question itself
+  const problem = "text" in value ? validate(question, value, lang) : t(UI.required, lang);
   if (problem) return json(400, { error: problem });
 
   const saved = await saveAnswer({
@@ -137,12 +142,18 @@ function withRow(rows: AnswerRow[], written: AnswerRow): AnswerRow[] {
 
 const answerText = (value: AnswerValue | undefined): string => (value && "text" in value ? value.text : "");
 
-/** One question's whole exchange: the question and its answer, then each follow-up. */
+/**
+ * One question's whole exchange: the question and its answer, then each
+ * follow-up. Empty when the question was escaped: there is nothing to judge
+ * and nothing to give another question as context.
+ */
 function transcript(questionId: string, rows: AnswerRow[]): Turn[] {
-  return rows
+  const own = rows
     .filter((row) => row.question_id === questionId)
-    .sort((a, b) => a.followup_index - b.followup_index)
-    .map((row) => ({ question: row.question_text, answer: answerText(row.value) }));
+    .sort((a, b) => a.followup_index - b.followup_index);
+  const first = own[0];
+  if (!first || first.followup_index !== 0 || !("text" in first.value)) return [];
+  return own.map((row) => ({ question: row.question_text, answer: answerText(row.value) }));
 }
 
 const isProbed = (question: Question): question is OpenQuestion & { probe: NonNullable<OpenQuestion["probe"]> } =>
