@@ -2,7 +2,8 @@
 // no participant text, no real company, no real person. Each fixture says what
 // the model should decide and why, so a failing eval names the rule it broke.
 //
-// `expect` is the decision the prompt's own criterion demands. "stop" also
+// `expect` is the decision the version-2 prompts demand: ask for the primary
+// element when it is missing, then for the secondary one. "stop" also
 // covers the answers that are findings in themselves — "nothing gets stuck",
 // "I don't remember" — where another question would push the person.
 // `forbidden` are words a follow-up must never contain: the prompts may not
@@ -22,6 +23,8 @@ export type Fixture = {
   /** A follow-up already asked and answered on this question. */
   earlier?: { question: string; answer: string };
   forbidden?: string[];
+  /** The language the answer is written in, when it is not the form's. The follow-up must be in it. */
+  answerLang?: Lang;
 };
 
 /** Names a follow-up must not contain when the person fishes for a recommendation. */
@@ -71,8 +74,8 @@ export const FIXTURES: Fixture[] = [
     question: "case",
     lang: "de",
     answer: "Ich habe kurz ihre Website angeschaut, mehr nicht.",
-    expect: "stop",
-    why: "one source named, even briefly, is present",
+    expect: "ask",
+    why: "a source, even briefly, is the first element; what they needed to know is absent, so version 2 asks for it",
   },
   {
     id: "does-not-remember",
@@ -112,9 +115,43 @@ export const FIXTURES: Fixture[] = [
     id: "sources-in-passing",
     question: "case",
     lang: "de",
-    answer: "Am Ende hat der Handelsregisterauszug gereicht, dort stand alles Nötige.",
+    answer: "Wir wollten wissen, wem die Firma gehört. Am Ende hat der Handelsregisterauszug gereicht.",
     expect: "stop",
-    why: "a source named in passing still names it",
+    why: "the source is named in passing and the need is stated: nothing missing",
+  },
+  {
+    id: "discovery-with-sources",
+    question: "case",
+    lang: "de",
+    answer: "Wir suchten neue Kunden im Maschinenbau in der Ostschweiz. Ich bin die Ausstellerliste der letzten Fachmesse durchgegangen, habe die Websites von etwa zwanzig Firmen angeschaut und beim Branchenverband nach Ansprechpersonen gefragt.",
+    expect: "stop",
+    why: "a search for companies not yet known, with concrete sources and the need named",
+  },
+  {
+    id: "discovery-without-steps",
+    question: "case",
+    lang: "en",
+    answer: "We were looking for new customers in our region.",
+    expect: "ask",
+    why: "a discovery goal, but no step and no source",
+  },
+  {
+    id: "english-answer-german-form",
+    question: "case",
+    lang: "de",
+    answerLang: "en",
+    answer: "We had to check a new logistics partner before signing the contract.",
+    expect: "ask",
+    why: "the goal without a step; written in English on a German form, so the follow-up is in English",
+  },
+  {
+    id: "one-word-source",
+    question: "case",
+    lang: "de",
+    answer: "Google.",
+    expect: "ask",
+    why: "a source, but not what they needed to know; too short to tell the language, so German, and the name is not repeated",
+    forbidden: TOOLS,
   },
 
   // ---- pains: a concrete example, a situation, not a generality -----------
@@ -159,8 +196,8 @@ export const FIXTURES: Fixture[] = [
     question: "pains",
     lang: "de",
     answer: "Bei einem Zulieferer aus dem Wallis fand ich nirgends eine Telefonnummer, nur ein Kontaktformular, auf das nie jemand geantwortet hat.",
-    expect: "stop",
-    why: "a specific occurrence, briefly told",
+    expect: "ask",
+    why: "a concrete situation that stops at the obstacle; what it led to is absent",
     context: CASE_CONTEXT_DE,
   },
   {
@@ -213,6 +250,25 @@ export const FIXTURES: Fixture[] = [
     why: "says \"for example\" but names no occurrence",
     context: CASE_CONTEXT_EN,
   },
+  {
+    id: "german-answer-english-form",
+    question: "pains",
+    lang: "en",
+    answerLang: "de",
+    answer: "Es dauert einfach immer viel zu lange, bis man etwas Verlässliches findet.",
+    expect: "ask",
+    why: "a generality; written in German on an English form, so the follow-up is in German",
+    context: CASE_CONTEXT_EN,
+  },
+  {
+    id: "off-topic",
+    question: "pains",
+    lang: "en",
+    answer: "We are a family business with twelve employees, founded in 1987.",
+    expect: "ask",
+    why: "does not answer the question; ask once for a concrete situation",
+    context: CASE_CONTEXT_EN,
+  },
 
   // ---- gains: what the result would change -------------------------------
   {
@@ -256,8 +312,8 @@ export const FIXTURES: Fixture[] = [
     question: "gains",
     lang: "de",
     answer: "Dann hätten wir schon nach zwei Tagen abgesagt statt nach drei Wochen.",
-    expect: "stop",
-    why: "the consequence is the whole answer",
+    expect: "ask",
+    why: "the consequence is there, but not what a good result would have contained",
     context: CASE_CONTEXT_DE,
   },
   {
@@ -296,9 +352,9 @@ export const FIXTURES: Fixture[] = [
     id: "consequence-for-the-team",
     question: "gains",
     lang: "de",
-    answer: "Mein Einkäufer hätte die Woche nicht mit Telefonieren verbracht, sondern mit den laufenden Bestellungen.",
+    answer: "Hätten wir gleich gewusst, ob die Firma pünktlich liefert, hätte mein Einkäufer die Woche nicht mit Telefonieren verbracht, sondern mit den laufenden Bestellungen.",
     expect: "stop",
-    why: "a consequence for the company, not only for the person",
+    why: "a consequence for the company, and the information that would have given it",
     context: CASE_CONTEXT_DE,
   },
   {
