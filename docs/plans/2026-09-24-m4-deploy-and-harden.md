@@ -39,7 +39,7 @@
 ## Open points (one question each, answered before the task named)
 
 1. **Answered 2026-09-24** (Koray): a neutral German name on `vercel.app` naming the survey and the region; the exact URL is kept out of this public repository (`CLAUDE.local.md`, GitHub secret `PRODUCTION_URL`). Free; names what it is and the region, not the school — OST on a free hosting domain would look like phishing and needs OST's permission; the invitation's sender and the welcome screen carry OST. Other regions later get a second `vercel.app` alias on the same project. Original question: A Vercel project gets `<project-name>.vercel.app`; the name appears in every invitation link, and "vercel" in it names a processor (the rule in `AGENTS.md`). Options: a neutral project name on `vercel.app` (free, e.g. `firmen-umfrage.vercel.app`), or an own domain (about CHF 15 a year, e.g. `firmenumfrage.ch`), or an OST subdomain (asks OST IT; slowest).
-2. **Before Task 9: the consent text.** M4's issue says "final consent text", but the wording goes through the ethics approval (thesis #3). Proposal: M4 ships the current text and the runbook records "consent text final after ethics approval"; no invitation goes out before that.
+2. **Before Task 9: the consent text.** M4's issue says "final consent text", but whether an ethics approval is needed is itself a question for the supervisors (thesis repository, issue #3, agenda of the supervisor meeting). Proposal: M4 ships the current text and the runbook records "consent text final after ethics approval"; no invitation goes out before that.
 
 ## Review Focus
 

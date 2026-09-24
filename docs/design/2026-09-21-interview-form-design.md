@@ -359,8 +359,9 @@ Worst case per participant 6 calls ≈ 0.02 USD.
   is not available on the Hobby plan (the gateway answers it with 403), so
   there is no zero-retention claim.
 - Withdrawal: the reference code on the thank-you screen; the runbook has the
-  delete-by-code step. Retention after the thesis is an open decision for the
-  ethics approval.
+  delete-by-code step. Retention after the thesis is open: a question for the
+  supervisors (thesis repository, issue #3), and for an ethics approval if
+  they say one is needed.
 - Swiss revDSG applies. Nothing a participant sees names a product.
 
 ## 11. Reliability and operations
