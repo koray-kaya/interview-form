@@ -237,8 +237,8 @@ export const FIXTURES: Fixture[] = [
       question: "Können Sie eine Situation schildern, in der das passiert ist?",
       answer: "Bei der Verpackungsfirma habe ich drei Wochen lang niemanden erreicht, der zuständig war.",
     },
-    expect: "stop",
-    why: "the earlier follow-up already produced the situation",
+    expect: "ask",
+    why: "the earlier follow-up produced the situation, but it stops at the obstacle: what it led to is still entirely absent",
     context: CASE_CONTEXT_DE,
   },
   {
@@ -285,8 +285,8 @@ export const FIXTURES: Fixture[] = [
     question: "gains",
     lang: "en",
     answer: "I would have seen within a day that they were too small for us, and not spent two meetings finding that out.",
-    expect: "stop",
-    why: "says plainly what would have been different",
+    expect: "ask",
+    why: "the consequence alone: the prompt's own example reads this very sentence as the consequence and lists the information separately (borderline; flipped between runs on 2026-09-24)",
     context: CASE_CONTEXT_EN,
   },
   {

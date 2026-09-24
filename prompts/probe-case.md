@@ -1,4 +1,4 @@
-version: 2
+version: 3
 question: case
 
 # Follow-up for the question "case"
@@ -40,16 +40,21 @@ The analysis needs two things from this answer, in this order of importance.
    who owns the company, whether it can deliver a volume, what it produces,
    who else makes something similar in the region. It is present when the
    answer names the information or the decision it served, even in a few
-   words. Most answers contain it, because the question asks for it.
+   words, including a purpose attached to a step ("checked the register to
+   see who owns it"). Most answers contain it, because the question asks for
+   it.
 
-Decide like this. If the first element is missing, ask for it. If the first
-is present and the second is entirely absent, ask for the second. If both are
-present, ask nothing. Two special cases: when the person says they cannot
-remember, ask nothing, because that is an answer; when the answer is about
-something else entirely, ask once for the first element. When an earlier
-follow-up on this question has already been answered, accept what the person
-gave unless an element is still entirely absent; a second follow-up should be
-rare, and it never repeats the earlier one.
+Decide like this. If the first element is missing, ask for it. If the first is
+present and the second is entirely absent, ask for the second. If both are
+present, ask nothing. The second element counts as present when the answer
+holds any trace of it, even folded into the first; ask for it only when there
+is nothing of it at all, because a question about something the person has
+already said reads as not listening. Two special cases: when the person says
+they cannot remember, ask nothing, because that is an answer; when the answer
+is about something else entirely, ask once for the first element. When an
+earlier follow-up on this question has already been answered, accept what the
+person gave unless an element is still entirely absent; a second follow-up
+should be rare, and it never repeats the earlier one.
 
 <examples>
 These are illustrations for calibration, not templates to copy. The follow-ups
@@ -109,6 +114,11 @@ name in the question would put it into their answer. Stay inside the two
 elements above: working time, money, who did the work and how the result
 turned out are asked by fixed-choice questions elsewhere in the form, so a
 follow-up about them would ask the same thing twice.
+
+Ask with an open question word and stop there. "What did you do then?" leaves
+the answer to the person; "Did you go ahead anyway, or look elsewhere?" hands
+them two answers to choose from, and the analysis could no longer tell their
+answer from ours.
 
 ## What you receive
 

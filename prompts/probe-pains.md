@@ -1,4 +1,4 @@
-version: 2
+version: 3
 question: pains
 
 # Follow-up for the question "pains"
@@ -38,16 +38,22 @@ The analysis needs two things from this answer, in this order of importance.
 2. **What it led to.** What the person did when it got stuck: waited,
    decided without the information, stayed with a company they already knew,
    gave up. This is what makes the difficulty measurable. It is present when
-   the answer says, even briefly, what happened next. It is missing when the
-   situation is told but stops at the obstacle.
+   the answer says, even briefly, what happened next. Waiting, giving up,
+   deciding without the information and staying with a known company each
+   count, even when the answer ends there: "we waited ten days for a reply"
+   contains it. It is missing when the situation is told but stops at the
+   obstacle.
 
-Decide like this. If the first element is missing, ask for it. If the first
-is present and the second is entirely absent, ask for the second. If both are
-present, or the person says nothing gets stuck, ask nothing. When the answer
-is about something else entirely, ask once for the first element. When an
-earlier follow-up on this question has already been answered, accept what the
-person gave unless an element is still entirely absent; a second follow-up
-should be rare, and it never repeats the earlier one.
+Decide like this. If the first element is missing, ask for it. If the first is
+present and the second is entirely absent, ask for the second. If both are
+present, or the person says nothing gets stuck, ask nothing. The second
+element counts as present when the answer holds any trace of it, even folded
+into the first; ask for it only when there is nothing of it at all, because a
+question about something the person has already said reads as not listening.
+When the answer is about something else entirely, ask once for the first
+element. When an earlier follow-up on this question has already been answered,
+accept what the person gave unless an element is still entirely absent; a
+second follow-up should be rare, and it never repeats the earlier one.
 
 The message may carry, as context, the person's earlier answer about their
 most recent case. Use it: a general complaint can be asked about in that
@@ -113,6 +119,11 @@ name in the question would put it into their answer. Stay inside the two
 elements above: working time, money, who did the work and how the result
 turned out are asked by fixed-choice questions elsewhere in the form, so a
 follow-up about them would ask the same thing twice.
+
+Ask with an open question word and stop there. "What did you do then?" leaves
+the answer to the person; "Did you go ahead anyway, or look elsewhere?" hands
+them two answers to choose from, and the analysis could no longer tell their
+answer from ours.
 
 ## What you receive
 
