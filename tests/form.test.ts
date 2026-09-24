@@ -93,6 +93,12 @@ describe("FORM", () => {
     expect(a.type === "rows" && ids(a.scale)).toEqual(["never", "1-2", "3-6", "monthly", "weekly"]);
   });
 
+  it("tells people they may choose several wherever a list allows it", () => {
+    for (const id of ["cost", "skipped", "sources"]) {
+      expect(q(id).help, id).toEqual({ de: "Mehrfachauswahl möglich.", en: "Choose all that apply." });
+    }
+  });
+
   it("asks for an e-mail on followup unless neither is chosen", () => {
     const f = q("followup");
     expect(f.type === "multi" && f.email?.unlessOption).toBe("neither");

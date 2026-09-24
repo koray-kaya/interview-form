@@ -17,13 +17,13 @@ export const UI = {
     en: "14 short questions, about 10 minutes: three to write, the rest to tap. There are no right answers; I want to know how you actually work.",
   },
   promise: {
-    de: "Ihre Antworten werden nur für diese Masterarbeit verwendet und ohne Firmennamen ausgewertet. Auf drei Ihrer schriftlichen Antworten kann eine kurze Rückfrage folgen; diese Rückfrage schreibt eine KI. Sie können jederzeit abbrechen.",
-    en: "Your answers are used only for this thesis and reported without company names. Three of your written answers may get a short follow-up question, written by an AI. You can stop at any time.",
+    de: "Ihre Antworten werden nur für diese Masterarbeit verwendet und ohne Firmennamen ausgewertet. Auf drei Ihrer schriftlichen Antworten können ein oder zwei kurze Rückfragen folgen; diese Rückfragen schreibt eine KI. Sie können jederzeit abbrechen.",
+    en: "Your answers are used only for this thesis and reported without company names. Three of your written answers may get one or two short follow-up questions, written by an AI. You can stop at any time.",
   },
   detailsLabel: { de: "Details", en: "Details" },
   details: {
-    de: `Dieser Link ist für Ihre Firma bestimmt; ich nutze das nur, um Sie nicht zweimal einzuladen und um Sie zu erreichen, wenn Sie das wünschen. Die Antworten werden in der Schweiz gespeichert. Verantwortlich: Koray Kaya, OST, ${CONTACT_EMAIL}. Wenn Sie den Referenzcode von der letzten Seite an diese Adresse schicken, werden Ihre Antworten gelöscht.`,
-    en: `This link is meant for your company; I use that only to avoid inviting you twice and to reach you if you wish. Answers are stored in Switzerland. Responsible: Koray Kaya, OST, ${CONTACT_EMAIL}. Send the reference code from the last page to this address and your answers will be deleted.`,
+    de: `Dieser Link ist für Ihre Firma bestimmt; ich nutze das nur, um Sie nicht zweimal einzuladen und um Sie zu erreichen, wenn Sie das wünschen. Verantwortlich: Koray Kaya, OST, ${CONTACT_EMAIL}. Wenn Sie den Referenzcode von der letzten Seite an diese Adresse schicken, werden Ihre Antworten gelöscht.`,
+    en: `This link is meant for your company; I use that only to avoid inviting you twice and to reach you if you wish. Responsible: Koray Kaya, OST, ${CONTACT_EMAIL}. Send the reference code from the last page to this address and your answers will be deleted.`,
   },
   consent: { de: "Ich habe das gelesen und mache mit.", en: "I have read this and agree to take part." },
   start: { de: "Start", en: "Start" },

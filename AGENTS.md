@@ -49,7 +49,10 @@ Decided (2026-09-21), details in the design doc:
   (gitignored). Free-text answers can name people; never in git, never in
   examples; eval fixtures use fictional companies.
 - Secrets only in `.env.local` and Vercel environment variables (gitignored).
-- Nothing a participant sees names a product or shows a logo.
+- Nothing a participant sees names the form's own processors (the AI,
+  hosting or database providers) or shows a logo. The `sources` screen names
+  Zefix, LinkedIn and ChatGPT as examples of sources; that is a design
+  decision (2026-09-24), not a breach.
 - The consent text promises only what the tiers deliver. Do not add claims.
 - main via short-lived branch → PR → review → merge.
 - Per-developer notes go in `CLAUDE.local.md` (gitignored).

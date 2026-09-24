@@ -223,8 +223,9 @@ bearer for that response.
 Client retries any `POST` once on network failure; the upsert makes that
 safe. A second `POST /api/responses` from the same browser is prevented by
 the stored id. A response can be resumed for 7 days; the daily cron deletes
-responses with `completed_at is null` older than that, which is the promise
-the consent text makes ("unfinished answers are deleted").
+responses with `completed_at is null` older than that. Form 1.0's consent
+text promised this ("unfinished answers are deleted"); the form 2.0 welcome
+text no longer mentions it, and the deletion stays.
 
 **One rule for what an answer set contains** (added 2026-09-22, M1). The
 browser and the server call the same pure function, `applyAnswer` in

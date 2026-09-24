@@ -139,6 +139,7 @@ export const FORM: Form = {
       id: "cost",
       type: "multi",
       text: { de: "Hat das etwas gekostet, abgesehen von der Arbeitszeit?", en: "Did it cost anything, apart from working time?" },
+      help: CHOOSE_ALL,
       exclusive: ["no", "dont-know"],
       options: [
         { id: "no", label: { de: "Nein", en: "No" } },
