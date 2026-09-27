@@ -291,7 +291,7 @@ git commit -m "feat: personal codes are made in company-reach (#24)"
 ## After merge
 
 - Vercel deploys `main`. Check once: `curl -s -u x:"$ADMIN_PASSWORD" https://<production>/api/admin/tags` answers `{"tags":[…]}`, and without `-u` answers 401.
-- In company-reach's `.env`, `SURVEY_ADMIN_PASSWORD` = this app's `ADMIN_PASSWORD`.
+- In company-reach's `.env`, `FORM_ADMIN_PASSWORD` = this app's `ADMIN_PASSWORD`.
 
 ## Self-review notes
 
