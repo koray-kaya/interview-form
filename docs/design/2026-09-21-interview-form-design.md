@@ -201,6 +201,11 @@ What is not stored: IP address, user agent, personal name. The e-mail
 address exists only inside the `followup` answer when the participant typed
 it. Deleting a response cascades to everything.
 
+Who a personal code went to is kept in company-reach, on the owner's machine,
+never here (2026-09-27, #24). `GET /api/admin/tags`, behind the admin
+password, returns only each tagged response's tag, start and completion time,
+so company-reach can show who answered.
+
 `company_uid` is a label, not a fact: a forwarded or edited link changes it.
 It is used to match responses to invitations during analysis and for nothing
 else.
@@ -342,7 +347,8 @@ Worst case per participant 6 calls ≈ 0.02 USD.
 - The admin page `/admin` sits behind HTTP Basic auth in `src/proxy.ts`
   (`ADMIN_PASSWORD`, 12 characters or more; without it the page stays shut),
   is `noindex` and `no-store`, and shows counts only — no answer text, no
-  company number.
+  company number. The one admin route, `/api/admin/tags`, returns tags and
+  times for company-reach and nothing else.
 - One Vercel firewall rate-limit rule: `/api` prefix, 120 requests per 10
   minutes per IP (fixed window; a whole form is about 25 requests). Raised
   from 60 on 2026-09-24: a test of the rule locked Koray's own network out for

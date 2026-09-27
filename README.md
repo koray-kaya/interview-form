@@ -118,10 +118,12 @@ activity; the daily job's read is meant to prevent that.
 **6. Make an invitation link, see the numbers.**
 1. Open `/admin` on the production URL; the browser asks for a password (any
    user name, the password is the `ADMIN_PASSWORD` environment variable).
-2. Paste a company number (UID) and press Create links, or press Personal
-   link for someone without one; copy the German or English link. Note who
-   gets a personal code: the answers carry the code, not a name.
-3. The same page shows how many responses are completed, in progress, and
+2. Paste a company number (UID) and press Create links; copy the German or
+   English link. Links for people without a company number are made in
+   company-reach, which records who gets each code.
+3. company-reach reads who started or completed through `/api/admin/tags`,
+   with the same password.
+4. The same page shows how many responses are completed, in progress, and
    from which kind of link. It never shows answer text.
 
 **7. Decommission after the thesis is submitted.**

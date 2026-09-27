@@ -21,16 +21,16 @@ describe("LinkMaker", () => {
     expect(screen.getByText(/\?c=CHE-123\.456\.789&l=de$/)).toBeInTheDocument();
   });
 
-  it("makes a personal link with a fresh code when there is no company number", async () => {
+  it("says personal links are made in company-reach, and offers no button for them", () => {
     render(<LinkMaker />);
-    await userEvent.click(screen.getByRole("button", { name: "Personal link" }));
-    expect(screen.getByText(/\?c=P-[2-9A-Z]{6}&l=de$/)).toBeInTheDocument();
-    expect(screen.getByText(/Note who you send/)).toBeInTheDocument();
+    expect(screen.getByText(/made in company-reach/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Personal link" })).not.toBeInTheDocument();
   });
 
   it("offers to copy each link", async () => {
     render(<LinkMaker />);
-    await userEvent.click(screen.getByRole("button", { name: "Personal link" }));
+    await userEvent.type(screen.getByLabelText(/Company number/), "CHE-123.456.788");
+    await userEvent.click(screen.getByRole("button", { name: "Create links" }));
     expect(screen.getAllByRole("button", { name: /Copy/ })).toHaveLength(2);
   });
 });
