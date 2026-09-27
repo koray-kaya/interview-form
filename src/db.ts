@@ -7,6 +7,7 @@ import type { AnswerValue } from "@/engine";
 import type { Lang } from "@/i18n";
 import { serverEnv } from "@/env";
 import { SMOKE_TAG } from "@/responses";
+import type { TagSource } from "@/tags";
 import type { StatsCall, StatsResponse } from "@/stats";
 
 export type ResponseRow = {
@@ -187,6 +188,14 @@ export async function readStats(): Promise<{ responses: StatsResponse[]; calls: 
     responses: must(responses, "readStats responses") as StatsResponse[],
     calls: must(calls, "readStats probe_calls") as StatsCall[],
   };
+}
+
+/** The three columns toTags needs, for company-reach; no answers. */
+export async function readTagSources(): Promise<TagSource[]> {
+  return must(
+    await db().from("responses").select("company_uid, created_at, completed_at").order("created_at"),
+    "readTagSources",
+  ) as TagSource[];
 }
 
 /** Every row of the three tables, for the export. */
