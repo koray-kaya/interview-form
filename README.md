@@ -5,6 +5,11 @@ Swiss companies to tell me how they look into other companies today — a
 possible customer, a supplier, a competitor — and what that costs them. This
 is the form they fill in.
 
+<img src="docs/assets/follow-up.png" alt="An open question on a phone, the answer under it and the AI follow-up question below" width="320">
+
+*An open question with the AI follow-up under it. The answer is an invented
+test answer; the follow-up is the one the model wrote for it in an eval run.*
+
 ## What it does
 
 1. Shows fourteen questions, one per screen, in German or English. About ten
@@ -39,6 +44,8 @@ npm run dev          # http://localhost:3000 (German; ?l=en for English)
 npm test             # offline, a few seconds
 npm run export       # all rows to data/export-YYYY-MM-DD.json, and the analysis
                      # table (one row per completed response) to .csv (gitignored)
+npx tsx scripts/readme-screenshot.ts   # redraws the picture above, with npm run dev
+                                       # running; every API call is mocked in the browser
 ```
 
 The AI follow-up is off unless `PROBE_ENABLED=true`; then it runs for every
