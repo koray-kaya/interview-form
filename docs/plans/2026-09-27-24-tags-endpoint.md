@@ -14,7 +14,7 @@ Issue #24. Branch `feat/24-tags-endpoint`, cut from `main`.
 
 ## Global Constraints
 
-- Contract with company-reach: `GET /api/admin/tags`, HTTP Basic auth with `ADMIN_PASSWORD` (any user name), `200 {"tags": [{"tag": string, "started_at": string, "completed_at": string | null}]}`; `401 {"error": "unauthorized"}` otherwise.
+- Contract with company-reach: `GET /api/admin/tags`, HTTP Basic auth with `ADMIN_PASSWORD` (any user name), `200 {"tags": [{"tag": string, "started_at": string, "completed_at": string | null}]}`; `401 {"error": "unauthorized"}` otherwise (in practice the Proxy's plain-text 401 comes first; company-reach reads only the status).
 - No answer text, no reference code, no language, no other column leaves through this route.
 - Untagged responses and the smoke test's (`SMOKE_TAG`) are left out.
 - The repository is public: fictional codes and UIDs in tests.

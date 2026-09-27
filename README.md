@@ -122,7 +122,9 @@ activity; the daily job's read is meant to prevent that.
    English link. Links for people without a company number are made in
    company-reach, which records who gets each code.
 3. company-reach reads who started or completed through `/api/admin/tags`,
-   with the same password.
+   with the same password. Unfinished responses are deleted after seven
+   days, so their tags drop out of the list; a start company-reach saw is
+   not kept here.
 4. The same page shows how many responses are completed, in progress, and
    from which kind of link. It never shows answer text.
 
