@@ -1,14 +1,15 @@
 "use client";
 // The admin page's link maker: a company number (UID) becomes a German and
-// an English invitation link; without one, "Personal link" makes a fresh
-// code (P-XXXXXX) instead. The check digit is only a warning now — every link
+// an English invitation link. The check digit is only a warning — every link
 // gets the AI follow-ups — but a mistyped number would label the answers
-// wrongly. Runs in the browser; nothing is stored.
+// wrongly. Personal links for people are made in company-reach, which records
+// who each one went to (#24); this app never learns a name. Runs in the
+// browser; nothing is stored.
 import { useState } from "react";
-import { inviteLinks, personalCode } from "@/links";
+import { inviteLinks } from "@/links";
 import { isValidUid } from "@/uid";
 
-type Made = { tag: string; personal: boolean; warning: boolean };
+type Made = { tag: string; warning: boolean };
 
 export function LinkMaker() {
   const [uid, setUid] = useState("");
@@ -18,12 +19,7 @@ export function LinkMaker() {
   function fromUid() {
     const tag = uid.trim();
     if (!tag) return;
-    setMade({ tag, personal: false, warning: !isValidUid(tag) });
-    setCopied(null);
-  }
-
-  function personal() {
-    setMade({ tag: personalCode(), personal: true, warning: false });
+    setMade({ tag, warning: !isValidUid(tag) });
     setCopied(null);
   }
 
@@ -41,6 +37,9 @@ export function LinkMaker() {
   return (
     <section className="flex flex-col gap-4 rounded-xl border border-border bg-white/70 p-5">
       <h2 className="text-xl font-semibold text-foreground">Invitation link</h2>
+      <p className="text-sm text-body">
+        Personal links for people without a company number are made in company-reach, which records who each one went to.
+      </p>
       <label className="flex flex-col gap-1.5">
         <span className="text-sm text-body">Company number (UID), e.g. CHE-123.456.789</span>
         <input
@@ -56,19 +55,11 @@ export function LinkMaker() {
         <button type="button" onClick={fromUid} className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-hover">
           Create links
         </button>
-        <button type="button" onClick={personal} className="rounded-md border border-accent/40 px-4 py-2 text-sm font-semibold text-accent hover:bg-accent/10">
-          Personal link
-        </button>
       </div>
 
       {made?.warning && (
         <p role="alert" className="rounded-md bg-danger/10 px-3 py-1.5 text-sm text-danger">
           This number fails the UID check digit. The link works, but check the number: the answers will carry it as their label.
-        </p>
-      )}
-      {made?.personal && (
-        <p className="text-sm text-body">
-          Code <strong className="text-foreground">{made.tag}</strong>. Note who you send it to: the answers will carry this code, not a name.
         </p>
       )}
 

@@ -7,6 +7,7 @@ import type { AnswerValue } from "@/engine";
 import type { Lang } from "@/i18n";
 import { serverEnv } from "@/env";
 import { SMOKE_TAG } from "@/responses";
+import type { TagSource } from "@/tags";
 import type { StatsCall, StatsResponse } from "@/stats";
 
 export type ResponseRow = {
@@ -52,6 +53,21 @@ function must<T>(result: { data: T; error: { message: string } | null }, what: s
   const data = check(result, what);
   if (data === null || data === undefined) throw new Error(`${what} returned no data`);
   return data;
+}
+
+/**
+ * Hosted Supabase (PostgREST) returns at most 1000 rows without an error, so
+ * an unpaged select can silently come back short. Compare the rows against
+ * the query's exact count (`{ count: "exact" }`) and fail loudly rather than
+ * let a caller mistake a cut-off page for the whole list; paging is a later
+ * issue. A null count (the option was left off, or PostgREST did not send
+ * one) throws too — without a count we cannot tell a short page from a
+ * complete one.
+ */
+export function wholeList<T>(rows: T[], count: number | null, what: string): T[] {
+  if (count === null) throw new Error(`${what}: no row count; page the query`);
+  if (rows.length < count) throw new Error(`${what}: got ${rows.length} of ${count} rows; page the query`);
+  return rows;
 }
 
 export async function createResponse(input: {
@@ -187,6 +203,20 @@ export async function readStats(): Promise<{ responses: StatsResponse[]; calls: 
     responses: must(responses, "readStats responses") as StatsResponse[],
     calls: must(calls, "readStats probe_calls") as StatsCall[],
   };
+}
+
+/**
+ * The three columns toTags needs, for company-reach; no answers. Ordered
+ * oldest first, so a silent 1000-row cut-off would drop the newest tags;
+ * `wholeList` turns that into a thrown error instead.
+ */
+export async function readTagSources(): Promise<TagSource[]> {
+  const result = await db()
+    .from("responses")
+    .select("company_uid, created_at, completed_at", { count: "exact" })
+    .order("created_at");
+  const rows = must(result, "readTagSources") as TagSource[];
+  return wholeList(rows, result.count, "readTagSources");
 }
 
 /** Every row of the three tables, for the export. */

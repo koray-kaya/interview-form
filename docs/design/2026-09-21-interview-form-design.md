@@ -201,6 +201,13 @@ What is not stored: IP address, user agent, personal name. The e-mail
 address exists only inside the `followup` answer when the participant typed
 it. Deleting a response cascades to everything.
 
+Who a personal code went to is kept in company-reach, on the owner's machine,
+never here (2026-09-27, #24). `GET /api/admin/tags`, behind the admin
+password, returns only each tagged response's tag, start and completion time,
+so company-reach can show who answered. Unfinished responses are deleted
+after seven days, so their tags drop out of the list; a start company-reach
+saw is not kept here.
+
 `company_uid` is a label, not a fact: a forwarded or edited link changes it.
 It is used to match responses to invitations during analysis and for nothing
 else.
@@ -208,6 +215,7 @@ else.
 ## 8. API
 
 All routes are same-origin route handlers under `src/app/api/`. Every route
+except the two server-to-server ones (`/api/cron/daily`, `/api/admin/tags`)
 rejects requests whose `Sec-Fetch-Site` header is not `same-origin` or
 `none`, and any body over 16 kB. The response id is a v4 UUID and acts as the
 bearer for that response.
@@ -219,6 +227,7 @@ bearer for that response.
 | `POST /api/responses/:id/answers` | `{ questionId, followupIndex, value, lang? }` | `{ followUp: { index, text } \| null }` | upsert on the unique key; refuses if not consented or completed; validates against the form; calls the probe when allowed. `lang` is the language on screen when the answer was given: the stored question text is taken from the form in that language, and a change is written to `responses.lang`, which therefore means "last used" |
 | `POST /api/responses/:id/complete` | — | `{ referenceCode }` | sets `completed_at`; first 8 hex characters of the id |
 | `GET /api/cron/daily` | header `Authorization: Bearer $CRON_SECRET` | `{ exported: n }` | keep-alive read + export; Vercel cron, once a day |
+| `GET /api/admin/tags` | Basic auth header | `{ tags: [{ tag, started_at, completed_at }] }` | for company-reach (#24); the admin password is checked in the Proxy and in the route; tagged responses only, smoke test excluded; unfinished responses drop out after seven days; answers 500 rather than a cut-off list |
 
 Client retries any `POST` once on network failure; the upsert makes that
 safe. A second `POST /api/responses` from the same browser is prevented by
@@ -336,13 +345,15 @@ Worst case per participant 6 calls ≈ 0.02 USD.
 - Until 2026-09-24 probing required a well-formed UID with a valid check
   digit, as a cost gate. Koray dropped the gate: invitations also go to
   people without a company number (a personal code `P-XXXXXX` from the admin
-  page), and the AI Gateway budget (10 USD/month) caps what abuse could
-  cost. Every response except the smoke test's is probed; the check digit
-  (weights 5 4 3 2 7 6 5 4, mod 11) now only warns on the admin page.
+  page; made in company-reach since 2026-09-27), and the AI Gateway budget
+  (10 USD/month) caps what abuse could cost. Every response except the
+  smoke test's is probed; the check digit (weights 5 4 3 2 7 6 5 4, mod 11)
+  now only warns on the admin page.
 - The admin page `/admin` sits behind HTTP Basic auth in `src/proxy.ts`
   (`ADMIN_PASSWORD`, 12 characters or more; without it the page stays shut),
   is `noindex` and `no-store`, and shows counts only — no answer text, no
-  company number.
+  company number. The one admin route, `/api/admin/tags`, returns tags and
+  times for company-reach and nothing else.
 - One Vercel firewall rate-limit rule: `/api` prefix, 120 requests per 10
   minutes per IP (fixed window; a whole form is about 25 requests). Raised
   from 60 on 2026-09-24: a test of the rule locked Koray's own network out for

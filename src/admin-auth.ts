@@ -1,7 +1,9 @@
 // The password check for the admin page: HTTP Basic auth, run by src/proxy.ts
-// before /admin is rendered. Any user name is accepted; the password must
-// match ADMIN_PASSWORD. Without a configured password (or a very short one)
-// the page stays shut. Node's crypto, no library.
+// before /admin is rendered, and again inside src/app/api/admin/tags/route.ts
+// (#24) so an edit to the Proxy's matcher cannot open that route on its own.
+// Any user name is accepted; the password must match ADMIN_PASSWORD. Without
+// a configured password (or a very short one) access stays shut. Node's
+// crypto, no library.
 import { createHash, timingSafeEqual } from "node:crypto";
 
 /** Shorter than this is not a password worth protecting data with. */

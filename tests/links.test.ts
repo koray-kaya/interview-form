@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { inviteLinks, personalCode } from "@/links";
+import { inviteLinks } from "@/links";
 
 describe("inviteLinks", () => {
   it("builds the German and English link for a tag", () => {
@@ -13,16 +13,3 @@ describe("inviteLinks", () => {
   });
 });
 
-describe("personalCode", () => {
-  it("is P- and six characters that cannot be misread (no 0, O, 1, I, L)", () => {
-    const code = personalCode();
-    expect(code).toMatch(/^P-[2-9A-HJKMNP-Z]{6}$/);
-  });
-  it("uses the random source it is given", () => {
-    expect(personalCode(() => 0)).toBe("P-222222");
-  });
-  it("differs from call to call", () => {
-    const codes = new Set(Array.from({ length: 50 }, () => personalCode()));
-    expect(codes.size).toBe(50);
-  });
-});

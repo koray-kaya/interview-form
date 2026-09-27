@@ -1,6 +1,6 @@
 // POST /api/responses — starts a response once the participant has consented.
 // The link's tag (?c=) is stored as given: a company number (UID), a personal
-// code from the admin page, or nothing. It is a label, never identity. AI
+// code made in company-reach, or nothing. It is a label, never identity. AI
 // follow-ups run for every response except the smoke test's (decided
 // 2026-09-24; the monthly AI Gateway budget caps the cost).
 import { z } from "zod";
