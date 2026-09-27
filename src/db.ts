@@ -55,6 +55,21 @@ function must<T>(result: { data: T; error: { message: string } | null }, what: s
   return data;
 }
 
+/**
+ * Hosted Supabase (PostgREST) returns at most 1000 rows without an error, so
+ * an unpaged select can silently come back short. Compare the rows against
+ * the query's exact count (`{ count: "exact" }`) and fail loudly rather than
+ * let a caller mistake a cut-off page for the whole list; paging is a later
+ * issue. A null count (the option was left off, or PostgREST did not send
+ * one) throws too — without a count we cannot tell a short page from a
+ * complete one.
+ */
+export function wholeList<T>(rows: T[], count: number | null, what: string): T[] {
+  if (count === null) throw new Error(`${what}: no row count; page the query`);
+  if (rows.length < count) throw new Error(`${what}: got ${rows.length} of ${count} rows; page the query`);
+  return rows;
+}
+
 export async function createResponse(input: {
   companyUid: string | null;
   lang: Lang;
@@ -190,12 +205,18 @@ export async function readStats(): Promise<{ responses: StatsResponse[]; calls: 
   };
 }
 
-/** The three columns toTags needs, for company-reach; no answers. */
+/**
+ * The three columns toTags needs, for company-reach; no answers. Ordered
+ * oldest first, so a silent 1000-row cut-off would drop the newest tags;
+ * `wholeList` turns that into a thrown error instead.
+ */
 export async function readTagSources(): Promise<TagSource[]> {
-  return must(
-    await db().from("responses").select("company_uid, created_at, completed_at").order("created_at"),
-    "readTagSources",
-  ) as TagSource[];
+  const result = await db()
+    .from("responses")
+    .select("company_uid, created_at, completed_at", { count: "exact" })
+    .order("created_at");
+  const rows = must(result, "readTagSources") as TagSource[];
+  return wholeList(rows, result.count, "readTagSources");
 }
 
 /** Every row of the three tables, for the export. */

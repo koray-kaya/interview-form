@@ -1,12 +1,26 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { TagSource } from "@/tags";
 
-// The database is mocked: these tests check what the route lets out, not Supabase.
+// The database is mocked: these tests check what the route lets out, not
+// Supabase. A row from Supabase carries more columns than TagSource names
+// (id, lang, …); the extra fields here prove the route drops them rather
+// than passing them through (Minor 4, #24). Typed loosely enough to compile:
+// cast the mock return.
 vi.mock("@/db", () => ({
-  readTagSources: vi.fn(async () => [
-    { company_uid: "P-7K3Q9X", created_at: "2026-10-03T10:00:00+00:00", completed_at: null },
-    { company_uid: "SMOKE", created_at: "2026-10-03T10:00:00+00:00", completed_at: null },
-  ]),
+  readTagSources: vi.fn(
+    async () =>
+      [
+        {
+          company_uid: "P-7K3Q9X",
+          created_at: "2026-10-03T10:00:00+00:00",
+          completed_at: null,
+          id: "3f1c2b7a-1111-4aaa-9bbb-000000000001",
+          lang: "de",
+        },
+        { company_uid: "SMOKE", created_at: "2026-10-03T10:00:00+00:00", completed_at: null },
+      ] as unknown as TagSource[],
+  ),
 }));
 import * as db from "@/db";
 import { GET } from "@/app/api/admin/tags/route";
@@ -35,6 +49,11 @@ describe("GET /api/admin/tags", () => {
     expect(await response.json()).toEqual({
       tags: [{ tag: "P-7K3Q9X", started_at: "2026-10-03T10:00:00+00:00", completed_at: null }],
     });
+  });
+
+  it("marks the response no-store itself, not only through the Proxy (Minor 5)", async () => {
+    const response = await get(basic(PASSWORD));
+    expect(response.headers.get("cache-control")).toBe("no-store");
   });
 
   it("refuses without the right password, and reads nothing", async () => {

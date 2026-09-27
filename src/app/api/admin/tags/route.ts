@@ -12,5 +12,10 @@ export async function GET(request: Request): Promise<Response> {
   if (!adminAuthorized(request.headers.get("authorization"), process.env.ADMIN_PASSWORD)) {
     return json(401, { error: "unauthorized" });
   }
-  return json(200, { tags: toTags(await readTagSources()) });
+  // no-store on the response itself: company-reach polls this route, and it
+  // should not rely only on the Proxy to keep the answer from being cached.
+  return new Response(JSON.stringify({ tags: toTags(await readTagSources()) }), {
+    status: 200,
+    headers: { "content-type": "application/json", "cache-control": "no-store" },
+  });
 }
