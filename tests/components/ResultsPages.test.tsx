@@ -64,6 +64,15 @@ describe("the open answers page", () => {
     expect(document.getElementById("pains")).not.toBeNull();
   });
 
+  it("shows each question's counts and the case summary line under its heading", async () => {
+    render(await OpenAnswersPage(search()));
+    const caseSection = document.getElementById("case");
+    expect(caseSection?.textContent).toContain("n = 2");
+    expect(caseSection?.textContent).toContain(
+      "1 answered · 1 chose “I can't think of such a case.” · 1 got an AI follow-up (1 in all)",
+    );
+  });
+
   it("shows markup in an answer as text", async () => {
     render(await OpenAnswersPage(search()));
     expect(screen.getByText(/<b>nirgends<\/b> steht es/)).toBeInTheDocument();
