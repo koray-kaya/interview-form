@@ -19,11 +19,11 @@ function Turn({ label, accent = false, muted = false, children }: { label: strin
   );
 }
 
-function DecisionTurn({ index, decision }: { index: number; decision: Decision }) {
+function DecisionTurn({ index, decision, answered }: { index: number; decision: Decision; answered: boolean }) {
   const earlier = decision.stale ? " (made on an earlier version of the answer)" : "";
   if (decision.decision === "ask") {
     return (
-      <Turn label={`AI follow-up ${index}`} accent>
+      <Turn label={`AI follow-up ${index}${answered ? " (answered)" : ""}`} accent>
         {decision.followUp}
         <span className="mt-1 block text-xs text-muted-foreground">Why: {decision.reason}{earlier}</span>
       </Turn>
@@ -52,11 +52,13 @@ export function ThreadView({ text, thread }: { text: string; thread: Thread | nu
 }
 
 function DecisionsAndReply({ step }: { step: Thread["steps"][number] }) {
+  const asks = step.decisions.filter((d) => d.decision === "ask").length;
   return (
     <>
-      {step.decisions.map((decision, i) => (
-        <DecisionTurn key={i} index={step.index} decision={decision} />
-      ))}
+      {step.decisions.map((decision, i) => {
+        const answered = asks > 1 && decision.decision === "ask" && step.reply !== null && decision.followUp === step.reply.question;
+        return <DecisionTurn key={i} index={step.index} decision={decision} answered={answered} />;
+      })}
       {step.reply && <Turn label={`Reply ${step.index}`}>{step.reply.text}</Turn>}
     </>
   );
