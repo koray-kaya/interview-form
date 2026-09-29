@@ -63,10 +63,13 @@ the people who asked to be contacted.
 
 ## 3. Pages
 
-A shared layout holds the title, the "as of" line and the tab bar
-(Overview · Open answers · Responses · Contacts). Every page is an async
-Server Component that calls `await connection()` first, reads the rows, and
-hands them to pure functions; the components below it are synchronous.
+Every page starts with the same header: the title, the "as of" line, a
+link that switches the question texts between English and German, and the tab
+bar (Overview · Open answers · Responses · Contacts). The tabs are plain
+links; each page draws the header itself, so no client component and no
+shared layout are needed. Every page is an async Server Component that calls
+`await connection()` first, reads the rows, and hands them to pure functions;
+the components below it are synchronous.
 
 | Route | Content |
 |---|---|
@@ -150,9 +153,10 @@ For each completed response and open question q:
 - **`src/contacts.ts`** — pure: the Contacts list. The only module whose
   output holds the company number and the e-mail address.
 - **Pages and components** under `src/app/admin/results/` and
-  `src/components/results/`: the layout with a small client component for the
-  tabs (`useSelectedLayoutSegment`, keeps `?l=`), and synchronous components
-  for bars, stacked bars, question cards and threads.
+  `src/components/results/`: a header every page draws (tabs as plain links
+  that keep `?l=`), and synchronous components for bars, stacked bars,
+  question cards and threads. The admin page's `Tile` moves to
+  `src/components/Tile.tsx` so both pages use it.
 
 Next.js 16: `params` and `searchParams` are Promises; `notFound()` from
 `next/navigation`; `connection()` from `next/server` keeps the pages
