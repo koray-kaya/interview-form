@@ -79,7 +79,9 @@ const PAGE = 1000;
  * Every row of a table, read in pages of PAGE (PostgREST's cap) in a stable
  * order — created_at, then id — and checked against the exact count by
  * wholeList, so a cut-off read throws instead of passing for the whole
- * table (#25).
+ * table (#25). Offset paging is not a snapshot: a row deleted between two
+ * pages can shift the next page by one, so past 1000 rows a read during
+ * writes can miss a row; keyset paging would fix it.
  */
 async function readEvery<T>(table: string, columns: string, what: string): Promise<T[]> {
   const rows: T[] = [];
