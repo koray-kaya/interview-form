@@ -8,9 +8,12 @@ vi.mock("@/db", async () => {
 });
 import * as db from "@/db";
 import ResultsPage from "@/app/admin/results/page";
+import OpenAnswersPage from "@/app/admin/results/open/page";
+import ResponsePage from "@/app/admin/results/[code]/page";
 import { EMAIL, UID } from "../results-fixture";
 
 const search = (l?: string) => ({ searchParams: Promise.resolve(l ? { l } : {}) });
+const code = (c: string, l?: string) => ({ params: Promise.resolve({ code: c }), ...search(l) });
 
 describe("the results overview", () => {
   it("shows the tiles and all fourteen questions, counts first", async () => {
@@ -47,5 +50,58 @@ describe("the results overview", () => {
     expect(screen.getAllByText("0 / 0").length).toBeGreaterThan(0);
     expect(screen.queryByRole("link", { name: "Responses" })).toBeNull();
     expect(document.body.textContent).not.toContain("NaN");
+  });
+});
+
+describe("the open answers page", () => {
+  it("shows each answer with the AI's follow-ups and reasons", async () => {
+    render(await OpenAnswersPage(search()));
+    expect(screen.getByText("Welche Quellen haben Sie dafür genutzt?")).toBeInTheDocument();
+    expect(screen.getByText(/Why: The need is named but no step or source\./)).toBeInTheDocument();
+    expect(screen.getByText(/the limit of 2 follow-ups was reached/)).toBeInTheDocument();
+    expect(screen.getByText(/No further question — The answer names a difficulty\. \(made on an earlier version of the answer\)/)).toBeInTheDocument();
+    expect(document.getElementById("pains")).not.toBeNull();
+  });
+
+  it("shows markup in an answer as text", async () => {
+    render(await OpenAnswersPage(search()));
+    expect(screen.getByText(/<b>nirgends<\/b> steht es/)).toBeInTheDocument();
+  });
+
+  it("never shows a company number or an e-mail address", async () => {
+    const { container } = render(await OpenAnswersPage(search()));
+    expect(container.textContent).not.toContain(UID);
+    expect(container.textContent).not.toContain(EMAIL);
+  });
+});
+
+describe("the response page", () => {
+  it("shows one response in words, with the skipped questions and neighbours", async () => {
+    render(await ResponsePage(code("aaaa0002")));
+    expect(screen.getByRole("heading", { name: "Response aaaa0002" })).toBeInTheDocument();
+    expect(screen.getAllByText(/question 4 was answered “I can't think of such a case\.”/).length).toBe(4);
+    expect(screen.getByText(/every row of question 10 was “Never”/)).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "← previous" })[0]).toHaveAttribute("href", "/admin/results/aaaa0001");
+  });
+
+  it("never shows a company number or an e-mail address", async () => {
+    for (const c of ["aaaa0001", "aaaa0002"]) {
+      const { container, unmount } = render(await ResponsePage(code(c)));
+      expect(container.textContent).not.toContain(UID);
+      expect(container.textContent).not.toContain(EMAIL);
+      unmount();
+    }
+  });
+
+  it("gives 404 for a malformed code without reading the database", async () => {
+    vi.mocked(db.readAll).mockClear();
+    for (const c of ["AAAA0002", "aaaa0002x", "../x"]) {
+      await expect(ResponsePage(code(c))).rejects.toThrow("NEXT_HTTP_ERROR_FALLBACK;404");
+    }
+    expect(db.readAll).not.toHaveBeenCalled();
+  });
+
+  it("gives 404 for a code that is not a counted response", async () => {
+    await expect(ResponsePage(code("aaaa0003"))).rejects.toThrow("NEXT_HTTP_ERROR_FALLBACK;404");
   });
 });
