@@ -32,7 +32,7 @@ function chosen(value: AnswerValue | undefined): string[] {
 }
 
 /** Whether a skip rule's condition holds for the answers so far. */
-function holds(when: Skip["when"], answers: Answers): boolean {
+export function holds(when: Skip["when"], answers: Answers): boolean {
   const values = chosen(answers[when.question]);
   if ("is" in when) return values.includes(when.is);
   return values.length > 0 && values.every((value) => value === when.every);
