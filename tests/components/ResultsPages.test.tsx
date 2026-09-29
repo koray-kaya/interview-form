@@ -10,6 +10,7 @@ import * as db from "@/db";
 import ResultsPage from "@/app/admin/results/page";
 import OpenAnswersPage from "@/app/admin/results/open/page";
 import ResponsePage from "@/app/admin/results/[code]/page";
+import ContactsPage from "@/app/admin/results/contacts/page";
 import { EMAIL, UID } from "../results-fixture";
 
 const search = (l?: string) => ({ searchParams: Promise.resolve(l ? { l } : {}) });
@@ -103,5 +104,20 @@ describe("the response page", () => {
 
   it("gives 404 for a code that is not a counted response", async () => {
     await expect(ResponsePage(code("aaaa0003"))).rejects.toThrow("NEXT_HTTP_ERROR_FALLBACK;404");
+  });
+});
+
+describe("the contacts page", () => {
+  it("lists the people who asked to be contacted, with company number and e-mail", async () => {
+    render(await ContactsPage(search()));
+    expect(screen.getByRole("link", { name: EMAIL })).toHaveAttribute("href", `mailto:${EMAIL}`);
+    expect(screen.getByText(UID)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "aaaa0001" })).toHaveAttribute("href", "/admin/results/aaaa0001");
+    expect(screen.queryByText("aaaa0002")).toBeNull();
+  });
+
+  it("is not printed", async () => {
+    const { container } = render(await ContactsPage(search()));
+    expect(container.querySelector("table")?.closest(".print\\:hidden")).not.toBeNull();
   });
 });
