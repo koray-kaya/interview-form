@@ -58,7 +58,7 @@ describe("the open answers page", () => {
     render(await OpenAnswersPage(search()));
     expect(screen.getByText("Welche Quellen haben Sie dafür genutzt?")).toBeInTheDocument();
     expect(screen.getByText(/Why: The need is named but no step or source\./)).toBeInTheDocument();
-    expect(screen.getByText(/the limit of 2 follow-ups was reached/)).toBeInTheDocument();
+    expect(screen.getAllByText(/the limit of 2 follow-ups was reached/)).toHaveLength(2);
     expect(screen.getByText(/No further question — The answer names a difficulty\. \(made on an earlier version of the answer\)/)).toBeInTheDocument();
     expect(document.getElementById("pains")).not.toBeNull();
   });

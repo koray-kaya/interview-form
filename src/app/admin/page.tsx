@@ -4,6 +4,7 @@
 // no answer text and no company number. Rendered on every request (the
 // numbers change), never cached, never indexed.
 import type { Metadata } from "next";
+import Link from "next/link";
 import { connection } from "next/server";
 import { LinkMaker } from "@/components/LinkMaker";
 import { Tile } from "@/components/Tile";
@@ -25,9 +26,9 @@ export default async function AdminPage() {
         <p className="text-sm text-body">Counts without the smoke test. Unfinished answers are deleted after seven days.</p>
       </header>
 
-      <a href="/admin/results" className="self-start text-sm font-medium text-accent underline-offset-4 hover:underline">
+      <Link href="/admin/results" className="self-start text-sm font-medium text-accent underline-offset-4 hover:underline">
         Read the results →
-      </a>
+      </Link>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Tile label="Completed" value={s.completed} />
