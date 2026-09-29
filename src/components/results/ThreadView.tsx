@@ -21,11 +21,12 @@ function Turn({ label, accent = false, muted = false, children }: { label: strin
 
 function DecisionTurn({ index, decision, answered }: { index: number; decision: Decision; answered: boolean }) {
   const earlier = decision.stale ? " (made on an earlier version of the answer)" : "";
+  const reason = decision.reason ?? "—";
   if (decision.decision === "ask") {
     return (
       <Turn label={`AI follow-up ${index}${answered ? " (answered)" : ""}`} accent>
         {decision.followUp}
-        <span className="mt-1 block text-xs text-muted-foreground">Why: {decision.reason}{earlier}</span>
+        <span className="mt-1 block text-xs text-muted-foreground">Why: {reason}{earlier}</span>
       </Turn>
     );
   }
@@ -33,9 +34,9 @@ function DecisionTurn({ index, decision, answered }: { index: number; decision: 
     return <Turn label="AI" muted>{`No follow-up — the model call failed (${decision.errorClass ?? "unknown"})${earlier}.`}</Turn>;
   }
   if (decision.decision === "rejected") {
-    return <Turn label="AI" muted>{`A follow-up was written but failed the check — ${decision.reason}${earlier}`}</Turn>;
+    return <Turn label="AI" muted>{`The model found something missing, but its follow-up failed the check — ${reason}${earlier}`}</Turn>;
   }
-  return <Turn label="AI" muted>{`No further question — ${decision.reason}${earlier}`}</Turn>;
+  return <Turn label="AI" muted>{`No further question — ${reason}${earlier}`}</Turn>;
 }
 
 export function ThreadView({ text, thread }: { text: string; thread: Thread | null }) {

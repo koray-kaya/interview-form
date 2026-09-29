@@ -26,6 +26,22 @@ describe("ThreadView", () => {
     expect(screen.getByText("Wie viele Lieferanten?")).toBeInTheDocument();
   });
 
+  it("says the model found something missing when a follow-up is rejected, and falls back for a null reason", () => {
+    const thread: Thread = {
+      max: 2,
+      end: "decided",
+      steps: [
+        {
+          index: 1,
+          decisions: [{ decision: "rejected", followUp: null, reason: null, errorClass: null, stale: false }],
+          reply: null,
+        },
+      ],
+    };
+    render(<ThreadView text="Wir suchten einen Lieferanten." thread={thread} />);
+    expect(screen.getByText("The model found something missing, but its follow-up failed the check — —")).toBeInTheDocument();
+  });
+
   it("adds no ‘(answered)’ suffix when a step has only one ask", () => {
     const thread: Thread = {
       max: 2,
