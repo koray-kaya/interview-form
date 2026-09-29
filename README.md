@@ -122,7 +122,7 @@ activity; the daily job's read is meant to prevent that.
 3. If it happens during fieldwork, move the project to the Pro plan for the
    fieldwork window.
 
-**6. Make an invitation link, see the numbers.**
+**6. Make an invitation link, see the numbers and the results.**
 1. Open `/admin` on the production URL; the browser asks for a password (any
    user name, the password is the `ADMIN_PASSWORD` environment variable).
 2. Paste a company number (UID) and press Create links; copy the German or
@@ -133,7 +133,12 @@ activity; the daily job's read is meant to prevent that.
    days, so their tags drop out of the list; a start company-reach saw is
    not kept here.
 4. The same page shows how many responses are completed, in progress, and
-   from which kind of link. It never shows answer text.
+   from which kind of link, and links to **Read the results**
+   (`/admin/results`): each question with its counts, the open answers with
+   the AI's follow-ups and reasons, each response by reference code, and the
+   contacts of the people who asked to be contacted. `?l=de` shows the
+   questions in German. To give the supervisors a copy, print a page to PDF
+   (the tabs and the contacts are left out).
 
 **7. Decommission after the thesis is submitted.**
 1. Final export (procedure 1), stored where the supervisors (or an ethics

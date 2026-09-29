@@ -28,6 +28,9 @@ export type AnswerRow = {
   value: AnswerValue;
 };
 
+/** An answers row as stored: the export and the results pages read these. */
+export type StoredAnswer = AnswerRow & { id: string; response_id: string; created_at: string };
+
 let client: SupabaseClient | null = null;
 
 function db(): SupabaseClient {
@@ -59,15 +62,43 @@ function must<T>(result: { data: T; error: { message: string } | null }, what: s
  * Hosted Supabase (PostgREST) returns at most 1000 rows without an error, so
  * an unpaged select can silently come back short. Compare the rows against
  * the query's exact count (`{ count: "exact" }`) and fail loudly rather than
- * let a caller mistake a cut-off page for the whole list; paging is a later
- * issue. A null count (the option was left off, or PostgREST did not send
- * one) throws too — without a count we cannot tell a short page from a
- * complete one.
+ * let a caller mistake a cut-off page for the whole list. `readEvery` pages;
+ * `readTagSources` still reads one page and relies on this check. A null
+ * count (the option was left off, or PostgREST did not send one) throws too
+ * — without a count we cannot tell a short page from a complete one.
  */
 export function wholeList<T>(rows: T[], count: number | null, what: string): T[] {
   if (count === null) throw new Error(`${what}: no row count; page the query`);
   if (rows.length < count) throw new Error(`${what}: got ${rows.length} of ${count} rows; page the query`);
   return rows;
+}
+
+const PAGE = 1000;
+
+/**
+ * Every row of a table, read in pages of PAGE (PostgREST's cap) in a stable
+ * order — created_at, then id — and checked against the exact count by
+ * wholeList, so a cut-off read throws instead of passing for the whole
+ * table (#25). Offset paging is not a snapshot: a row deleted between two
+ * pages can shift the next page by one, so past 1000 rows a read during
+ * writes can miss a row; keyset paging would fix it.
+ */
+async function readEvery<T>(table: string, columns: string, what: string): Promise<T[]> {
+  const rows: T[] = [];
+  let count: number | null = null;
+  for (let from = 0; ; from += PAGE) {
+    const result = await db()
+      .from(table)
+      .select(columns, { count: "exact" })
+      .order("created_at")
+      .order("id")
+      .range(from, from + PAGE - 1);
+    const page = must(result, what) as unknown as T[];
+    count = result.count;
+    rows.push(...page);
+    if (page.length < PAGE) break;
+  }
+  return wholeList(rows, count, what);
 }
 
 export async function createResponse(input: {
@@ -196,13 +227,10 @@ export async function touch(): Promise<void> {
 /** The few columns the admin page counts; no answer text. */
 export async function readStats(): Promise<{ responses: StatsResponse[]; calls: StatsCall[] }> {
   const [responses, calls] = await Promise.all([
-    db().from("responses").select("company_uid, lang, form_version, created_at, completed_at"),
-    db().from("probe_calls").select("decision"),
+    readEvery<StatsResponse>("responses", "company_uid, lang, form_version, created_at, completed_at", "readStats responses"),
+    readEvery<StatsCall>("probe_calls", "decision", "readStats probe_calls"),
   ]);
-  return {
-    responses: must(responses, "readStats responses") as StatsResponse[],
-    calls: must(calls, "readStats probe_calls") as StatsCall[],
-  };
+  return { responses, calls };
 }
 
 /**
@@ -219,18 +247,14 @@ export async function readTagSources(): Promise<TagSource[]> {
   return wholeList(rows, result.count, "readTagSources");
 }
 
-/** Every row of the three tables, for the export. */
-export async function readAll(): Promise<{ responses: unknown[]; answers: unknown[]; probe_calls: unknown[] }> {
+/** Every row of the three tables, for the export and the results pages. */
+export async function readAll(): Promise<{ responses: ResponseRow[]; answers: StoredAnswer[]; probe_calls: StoredCall[] }> {
   const [responses, answers, probeCalls] = await Promise.all([
-    db().from("responses").select("*").order("created_at"),
-    db().from("answers").select("*").order("created_at"),
-    db().from("probe_calls").select("*").order("created_at"),
+    readEvery<ResponseRow>("responses", "*", "readAll responses"),
+    readEvery<StoredAnswer>("answers", "*", "readAll answers"),
+    readEvery<StoredCall>("probe_calls", "*", "readAll probe_calls"),
   ]);
-  return {
-    responses: must(responses, "readAll responses"),
-    answers: must(answers, "readAll answers"),
-    probe_calls: must(probeCalls, "readAll probe_calls"),
-  };
+  return { responses, answers, probe_calls: probeCalls };
 }
 
 export type ProbeDecision = "ask" | "stop" | "error" | "rejected";
@@ -251,6 +275,9 @@ export type ProbeCallRow = {
   /** Where inference ran ("eu"), as the gateway reported it; null when it did not say. */
   inference_region: string | null;
 };
+
+/** A probe_calls row as stored. */
+export type StoredCall = ProbeCallRow & { id: number; created_at: string };
 
 /** Model calls already made for one question of one response (the limit counts these). */
 export async function countProbeCalls(responseId: string, questionId: string): Promise<number> {

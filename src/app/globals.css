@@ -65,3 +65,13 @@ body {
     animation: none !important;
   }
 }
+
+/* Printing the results for the supervisors: A4, no page gradient, and the
+   bars keep their colour even when the browser leaves out background
+   graphics. */
+@media print {
+  @page { size: A4; margin: 16mm 14mm; }
+  body { background: none; }
+  * { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  h2, h3 { break-after: avoid; }
+}
