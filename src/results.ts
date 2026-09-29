@@ -2,8 +2,10 @@
 // which responses count, n and the counts per question, the tiles, the open
 // answers with their threads, and one response in words (design note
 // docs/design/2026-09-28-results-dashboard.md §2–§4). Pure functions, tested
-// without a database. Nothing here returns a company number or an e-mail
-// address; those leave only through contacts.ts.
+// without a database. What the pages render from here — the counts, tiles,
+// open answers and response view — carries no company number and no e-mail
+// address. countedResponses hands back the raw rows; only contacts.ts reads
+// their company number.
 import type { ResponseRow, StoredAnswer, StoredCall } from "@/db";
 import { AnswerValueSchema, holds, type AnswerValue, type Answers } from "@/engine";
 import type { Form, MultiQuestion, OpenQuestion, Option, Question, RowsQuestion, SingleQuestion } from "@/form";
@@ -33,7 +35,11 @@ export function shareLabel(count: number, n: number): string {
   return n === 0 ? "0 / 0" : `${count} / ${n} · ${percent(count, n)}%`;
 }
 
-/** Completed responses of this form version, without the smoke test's, in order of completion. */
+/**
+ * Completed responses of this form version, without the smoke test's, in
+ * order of completion. Raw rows, company number included: for filtering and
+ * for contacts.ts, never for rendering.
+ */
 export function countedResponses(form: Form, responses: ResponseRow[]): ResponseRow[] {
   return responses
     .filter((r) => r.completed_at !== null && r.form_version === form.version && r.company_uid !== SMOKE_TAG)
