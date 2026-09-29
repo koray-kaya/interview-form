@@ -26,7 +26,7 @@ export default async function ResultsPage({ searchParams }: { searchParams: Prom
         <Tile label="Completed" value={s.completed} />
         <Tile label="Median time" value={s.medianMinutes === null ? "–" : `${Math.round(s.medianMinutes)} min`} />
         <Tile label="Follow-ups asked" value={s.followUps} />
-        <Tile label="Model calls" value={s.calls} hint={`${s.stops} stops, ${s.errors} errors`} />
+        <Tile label="Model calls" value={s.calls} hint={`${s.stops} stops, ${s.errors} errors or rejected`} />
       </div>
       <h2 className="mt-4 text-lg font-semibold text-foreground">Questions</h2>
       {questionResults(FORM, rows).map((result) => (

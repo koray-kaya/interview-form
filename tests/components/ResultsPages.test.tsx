@@ -45,6 +45,11 @@ describe("the results overview", () => {
     expect(container.textContent).not.toContain(EMAIL);
   });
 
+  it("counts rejected decisions into the errors hint", async () => {
+    render(await ResultsPage(search()));
+    expect(screen.getByText("3 stops, 0 errors or rejected")).toBeInTheDocument();
+  });
+
   it("renders before the first completed response, without a Responses tab", async () => {
     vi.mocked(db.readAll).mockResolvedValueOnce({ responses: [], answers: [], probe_calls: [] });
     render(await ResultsPage(search()));
