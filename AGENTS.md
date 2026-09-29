@@ -17,9 +17,12 @@ produced every question.
 
 Decided (2026-09-21), details in the design doc:
 - The form is a TypeScript file (`src/form.ts`) with a version; no form
-  builder. Changing a question means changing that file. One admin page
+  builder. Changing a question means changing that file. The admin page
   (`/admin`, behind `ADMIN_PASSWORD`; 2026-09-24) shows counts and makes
-  invitation links — never answer text.
+  invitation links; its results pages (`/admin/results`, 2026-09-28, #31)
+  show the answers by reference code. The company number and e-mail
+  address appear only on their Contacts page, for people who asked to be
+  contacted.
 - The link carries a tag (`?c=`): the invited company's public register
   number, or a personal code (`P-XXXXXX`) made in company-reach, which records
   who it went to; this app never stores the name (2026-09-27, #24).

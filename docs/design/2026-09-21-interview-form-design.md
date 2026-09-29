@@ -351,9 +351,13 @@ Worst case per participant 6 calls ≈ 0.02 USD.
   now only warns on the admin page.
 - The admin page `/admin` sits behind HTTP Basic auth in `src/proxy.ts`
   (`ADMIN_PASSWORD`, 12 characters or more; without it the page stays shut),
-  is `noindex` and `no-store`, and shows counts only — no answer text, no
-  company number. The one admin route, `/api/admin/tags`, returns tags and
-  times for company-reach and nothing else.
+  is `noindex` and `no-store`, and shows counts. Its results pages
+  (`/admin/results`, 2026-09-28, #31; `2026-09-28-results-dashboard.md`)
+  show the answers by reference code; the company number and the e-mail
+  address appear only on their Contacts page, for the people who asked to
+  be contacted, and that page is not printed. The one admin route,
+  `/api/admin/tags`, returns tags and times for company-reach and nothing
+  else.
 - One Vercel firewall rate-limit rule: `/api` prefix, 120 requests per 10
   minutes per IP (fixed window; a whole form is about 25 requests). Raised
   from 60 on 2026-09-24: a test of the rule locked Koray's own network out for
